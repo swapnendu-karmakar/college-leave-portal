@@ -16,7 +16,7 @@ export const getColleges = async () => {
     .from('colleges')
     .select('*')
     .order('name');
-  
+
   if (error) throw error;
   return data;
 };
@@ -27,7 +27,7 @@ export const createCollege = async (college) => {
     .insert(college)
     .select()
     .single();
-  
+
   if (error) throw error;
   return data;
 };
@@ -39,7 +39,7 @@ export const updateCollege = async (id, updates) => {
     .eq('id', id)
     .select()
     .single();
-  
+
   if (error) throw error;
   return data;
 };
@@ -49,7 +49,7 @@ export const deleteCollege = async (id) => {
     .from('colleges')
     .delete()
     .eq('id', id);
-  
+
   if (error) throw error;
 };
 
@@ -60,7 +60,7 @@ export const getDepartmentsByCollege = async (collegeId) => {
     .select('*')
     .eq('college_id', collegeId)
     .order('name');
-  
+
   if (error) throw error;
   return data;
 };
@@ -71,7 +71,7 @@ export const createDepartment = async (department) => {
     .insert(department)
     .select()
     .single();
-  
+
   if (error) throw error;
   return data;
 };
@@ -83,7 +83,7 @@ export const updateDepartment = async (id, updates) => {
     .eq('id', id)
     .select()
     .single();
-  
+
   if (error) throw error;
   return data;
 };
@@ -93,7 +93,7 @@ export const deleteDepartment = async (id) => {
     .from('departments')
     .delete()
     .eq('id', id);
-  
+
   if (error) throw error;
 };
 
@@ -104,7 +104,7 @@ export const getBranchesByDepartment = async (departmentId) => {
     .select('*')
     .eq('department_id', departmentId)
     .order('name');
-  
+
   if (error) throw error;
   return data;
 };
@@ -115,7 +115,7 @@ export const createBranch = async (branch) => {
     .insert(branch)
     .select()
     .single();
-  
+
   if (error) throw error;
   return data;
 };
@@ -127,7 +127,7 @@ export const updateBranch = async (id, updates) => {
     .eq('id', id)
     .select()
     .single();
-  
+
   if (error) throw error;
   return data;
 };
@@ -137,7 +137,7 @@ export const deleteBranch = async (id) => {
     .from('branches')
     .delete()
     .eq('id', id);
-  
+
   if (error) throw error;
 };
 
@@ -155,7 +155,7 @@ export const getDivisionsByBranch = async (branchId) => {
     `)
     .eq('branch_id', branchId)
     .order('code');
-  
+
   if (error) throw error;
   return data;
 };
@@ -166,7 +166,7 @@ export const createDivision = async (division) => {
     .insert(division)
     .select()
     .single();
-  
+
   if (error) throw error;
   return data;
 };
@@ -178,7 +178,7 @@ export const updateDivision = async (id, updates) => {
     .eq('id', id)
     .select()
     .single();
-  
+
   if (error) throw error;
   return data;
 };
@@ -188,7 +188,7 @@ export const deleteDivision = async (id) => {
     .from('divisions')
     .delete()
     .eq('id', id);
-  
+
   if (error) throw error;
 };
 
@@ -196,9 +196,9 @@ export const deleteDivision = async (id) => {
 export const getAllMFTs = async () => {
   const { data, error } = await supabaseAdmin
     .from('mft')
-    .select('id, name, email, created_at')
+    .select('id, name, email, created_at, divisions(id, code, semester, batch_number)')
     .order('name');
-  
+
   if (error) throw error;
   return data;
 };
@@ -209,7 +209,7 @@ export const createMFT = async (mft) => {
     .insert(mft)
     .select('id, name, email, created_at')
     .single();
-  
+
   if (error) throw error;
   return data;
 };
@@ -220,7 +220,19 @@ export const mftLogin = async (email, password) => {
     .select('*')
     .eq('email', email)
     .single();
-  
+
+  if (error) throw error;
+  return data;
+};
+
+export const updateMFTPassword = async (id, passwordHash) => {
+  const { data, error } = await supabaseAdmin
+    .from('mft')
+    .update({ password_hash: passwordHash })
+    .eq('id', id)
+    .select('id, email')
+    .single();
+
   if (error) throw error;
   return data;
 };
@@ -239,7 +251,7 @@ export const getMFTDivisions = async (mftId) => {
       )
     `)
     .eq('mft_id', mftId);
-  
+
   if (error) throw error;
   return data;
 };
@@ -251,20 +263,37 @@ export const getStudentsByDivision = async (divisionId) => {
     .select('*')
     .eq('division_id', divisionId)
     .order('enrollment_number');
-  
+
   if (error) throw error;
   return data;
 };
 
-export const verifyStudentEnrollment = async (enrollmentNumber, divisionId) => {
+export const verifyStudentEnrollment = async (enrollmentNumber, divisionId, studentName, email) => {
   const { data, error } = await supabase
     .from('students')
     .select('*')
     .eq('enrollment_number', enrollmentNumber)
     .eq('division_id', divisionId)
     .single();
-  
+
   if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows returned
+
+  if (!data) return null;
+
+  // Validate name (case-insensitive) and email
+  const nameMatch = data.name.trim().toLowerCase() === studentName.trim().toLowerCase();
+  const emailMatch = data.email.trim().toLowerCase() === email.trim().toLowerCase();
+
+  // Also check if mft_id matches? No, mft_id is in division table, student table has division_id.
+
+  if (!nameMatch || !emailMatch) {
+    // Return a special object or throw error to distinguish from "not found"
+    // But for simplicity in UI, we can just return null or throw.
+    // The UI currently checks `if (!student)`.
+    // Let's throw a specific error so we can show it to the user.
+    throw new Error('Student name or email does not match the enrollment record.');
+  }
+
   return data;
 };
 
@@ -274,7 +303,7 @@ export const createStudent = async (student) => {
     .insert(student)
     .select()
     .single();
-  
+
   if (error) throw error;
   return data;
 };
@@ -284,7 +313,7 @@ export const bulkCreateStudents = async (students) => {
     .from('students')
     .insert(students)
     .select();
-  
+
   if (error) throw error;
   return data;
 };
@@ -296,7 +325,7 @@ export const updateStudent = async (id, updates) => {
     .eq('id', id)
     .select()
     .single();
-  
+
   if (error) throw error;
   return data;
 };
@@ -306,18 +335,18 @@ export const deleteStudent = async (id) => {
     .from('students')
     .delete()
     .eq('id', id);
-  
+
   if (error) throw error;
 };
 
 // ============= FACULTY OPERATIONS =============
 export const getFacultyByDivision = async (divisionId) => {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('faculty')
     .select('*')
     .eq('division_id', divisionId)
     .order('name');
-  
+
   if (error) throw error;
   return data;
 };
@@ -328,7 +357,7 @@ export const createFaculty = async (faculty) => {
     .insert(faculty)
     .select()
     .single();
-  
+
   if (error) throw error;
   return data;
 };
@@ -338,7 +367,7 @@ export const deleteFaculty = async (id) => {
     .from('faculty')
     .delete()
     .eq('id', id);
-  
+
   if (error) throw error;
 };
 
@@ -356,7 +385,7 @@ export const createLeaveApplication = async (application) => {
     .insert({ ...application, application_id: applicationId })
     .select()
     .single();
-  
+
   if (error) throw error;
   return data;
 };
@@ -374,7 +403,7 @@ export const getApplicationById = async (applicationId) => {
     `)
     .eq('application_id', applicationId)
     .single();
-  
+
   if (error) throw error;
   return data;
 };
@@ -389,7 +418,7 @@ export const getApplicationsByMFT = async (mftId) => {
     `)
     .eq('mft_id', mftId)
     .order('created_at', { ascending: false });
-  
+
   if (error) throw error;
   return data;
 };
@@ -401,7 +430,7 @@ export const updateApplicationStatus = async (id, status, reviewedAt = new Date(
     .eq('id', id)
     .select()
     .single();
-  
+
   if (error) throw error;
   return data;
 };
@@ -413,7 +442,7 @@ export const updateProofStatus = async (applicationId, proofStatus) => {
     .eq('id', applicationId)
     .select()
     .single();
-  
+
   if (error) throw error;
   return data;
 };
@@ -421,7 +450,8 @@ export const updateProofStatus = async (applicationId, proofStatus) => {
 // ============= PROOF OPERATIONS =============
 export const uploadProof = async (file, applicationId) => {
   const fileExt = file.name.split('.').pop();
-  const fileName = `${applicationId}-${Date.now()}.${fileExt}`;
+  const fileNamePrefix = applicationId || 'temp';
+  const fileName = `${fileNamePrefix}-${Date.now()}.${fileExt}`;
   const filePath = `proofs/${fileName}`;
 
   const { data: uploadData, error: uploadError } = await supabase.storage
@@ -437,13 +467,21 @@ export const uploadProof = async (file, applicationId) => {
   return { filePath, publicUrl: urlData.publicUrl, fileName: file.name };
 };
 
+export const deleteStorageFile = async (filePath) => {
+  const { error } = await supabase.storage
+    .from('leave-proofs')
+    .remove([filePath]);
+
+  if (error) throw error;
+};
+
 export const createProof = async (proof) => {
   const { data, error } = await supabase
     .from('proofs')
     .insert(proof)
     .select()
     .single();
-  
+
   if (error) throw error;
   return data;
 };
@@ -455,7 +493,7 @@ export const updateProofReviewStatus = async (id, status) => {
     .eq('id', id)
     .select()
     .single();
-  
+
   if (error) throw error;
   return data;
 };
@@ -466,7 +504,7 @@ export const checkAdminExists = async () => {
     .from('admins')
     .select('id')
     .limit(1);
-  
+
   if (error) throw error;
   return data && data.length > 0;
 };
@@ -477,7 +515,7 @@ export const createAdmin = async (admin) => {
     .insert(admin)
     .select('id, email, created_at')
     .single();
-  
+
   if (error) throw error;
   return data;
 };
@@ -488,7 +526,7 @@ export const adminLogin = async (email) => {
     .select('*')
     .eq('email', email)
     .single();
-  
+
   if (error) throw error;
   return data;
 };
@@ -500,7 +538,7 @@ export const updateAdminPassword = async (id, passwordHash) => {
     .eq('id', id)
     .select('id, email')
     .single();
-  
+
   if (error) throw error;
   return data;
 };

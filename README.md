@@ -101,3 +101,7 @@ leave-portal/
 ## License
 
 MIT
+
+## Support
+
+For issues or questions, please refer to the SETUP_GUIDE.md or create an issue in the repository.

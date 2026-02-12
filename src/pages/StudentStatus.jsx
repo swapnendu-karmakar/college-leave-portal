@@ -146,10 +146,10 @@ const StudentStatus = () => {
     };
 
     return (
-        <div className="min-h-screen bg-purple-50 py-6 sm:py-12 px-4">
+        <div className="min-h-screen bg-purple-50 dark:bg-gray-900 py-6 sm:py-12 px-4 transition-colors duration-300">
             <div className="max-w-4xl mx-auto">
                 {/* Header Card */}
-                <div className="bg-purple-600 text-white rounded-t-3xl p-6 sm:p-10 shadow-xl relative overflow-hidden">
+                <div className="bg-purple-600 dark:bg-purple-900 text-white rounded-t-3xl p-6 sm:p-10 shadow-xl relative overflow-hidden transition-colors duration-300">
                     <div className="absolute inset-0 bg-white/10 backdrop-blur-sm"></div>
                     <div className="relative z-10 flex items-center gap-4">
                         <div className="w-12 h-12 sm:w-16 sm:h-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center">
@@ -163,14 +163,14 @@ const StudentStatus = () => {
                 </div>
 
                 {/* Search Form */}
-                <div className="bg-white p-6 sm:p-8 shadow-xl">
+                <div className="bg-white dark:bg-gray-800 p-6 sm:p-8 shadow-xl transition-colors duration-300">
                     <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                         <input
                             type="text"
                             value={applicationId}
                             onChange={(e) => setApplicationId(e.target.value)}
                             placeholder="Enter Application ID (e.g., LA-XXX-XXXX)"
-                            className="flex-1 px-4 py-3.5 border-2 border-gray-200 rounded-xl text-base transition-all focus:outline-none focus:border-violet-500 focus:ring-4 focus:ring-violet-100 hover:border-gray-300"
+                            className="flex-1 px-4 py-3.5 border-2 border-gray-200 dark:border-gray-700 rounded-xl text-base transition-all focus:outline-none focus:border-violet-500 focus:ring-4 focus:ring-violet-100 dark:focus:ring-violet-900/30 hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
                         />
                         <button
                             type="submit"
@@ -209,23 +209,23 @@ const StudentStatus = () => {
 
                 {/* Application Details */}
                 {application && (
-                    <div className="bg-white rounded-b-3xl shadow-xl p-6 sm:p-8">
+                    <div className="bg-white dark:bg-gray-800 rounded-b-3xl shadow-xl p-6 sm:p-8 transition-colors duration-300">
                         {/* Header with Actions */}
-                        <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-8 pb-6 border-b-2 border-purple-100">
+                        <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-8 pb-6 border-b-2 border-purple-100 dark:border-purple-900/50">
                             <div className="flex items-center gap-3">
-                                <div className="w-12 h-12 bg-violet-100 rounded-xl flex items-center justify-center">
-                                    <FileText className="w-6 h-6 text-violet-600" />
+                                <div className="w-12 h-12 bg-violet-100 dark:bg-violet-900/30 rounded-xl flex items-center justify-center">
+                                    <FileText className="w-6 h-6 text-violet-600 dark:text-violet-400" />
                                 </div>
                                 <div>
-                                    <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Application Details</h2>
-                                    <p className="text-sm text-gray-600 font-mono">{application.application_id}</p>
+                                    <h2 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-white">Application Details</h2>
+                                    <p className="text-sm text-gray-600 dark:text-gray-400 font-mono">{application.application_id}</p>
                                 </div>
                             </div>
 
                             <div className="flex flex-wrap gap-3 w-full sm:w-auto">
                                 <button
                                     onClick={handleCopy}
-                                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-medium transition-all text-sm"
+                                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-xl font-medium transition-all text-sm"
                                 >
                                     {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                                     <span>{copied ? 'Copied!' : 'Copy ID'}</span>
@@ -243,11 +243,11 @@ const StudentStatus = () => {
                         {/* Status Badges */}
                         <div className="flex flex-wrap gap-4 mb-8">
                             <div className="flex items-center gap-2">
-                                <span className="text-sm font-semibold text-gray-600">Application:</span>
+                                <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">Application:</span>
                                 <StatusBadge status={application.status} />
                             </div>
                             <div className="flex items-center gap-2">
-                                <span className="text-sm font-semibold text-gray-600">Proof:</span>
+                                <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">Proof:</span>
                                 <StatusBadge status={application.proof_status} text={getProofStatusText(application.proof_status)} />
                             </div>
                         </div>
@@ -274,17 +274,17 @@ const StudentStatus = () => {
 
                         {/* Proofs Section */}
                         {application.proofs && application.proofs.length > 0 && (
-                            <div className="mb-8 p-6 bg-gray-50 rounded-2xl border border-purple-100">
-                                <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                                    <FileText className="w-5 h-5 text-purple-600" />
+                            <div className="mb-8 p-6 bg-gray-50 dark:bg-gray-700/30 rounded-2xl border border-purple-100 dark:border-purple-900/30">
+                                <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
+                                    <FileText className="w-5 h-5 text-purple-600 dark:text-purple-400" />
                                     Uploaded Proofs
                                 </h3>
                                 <div className="space-y-3">
                                     {application.proofs.map((proof) => (
-                                        <div key={proof.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 bg-white rounded-xl border border-gray-200 shadow-sm">
-                                            <div className="flex items-center gap-3 flex-1">
+                                        <div key={proof.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                                            <div className="flex items-center gap-3 flex-1 overflow-hidden">
                                                 <FileText className="w-5 h-5 text-gray-400" />
-                                                <span className="text-gray-900 font-medium text-sm break-all">{proof.file_name}</span>
+                                                <span className="text-gray-900 dark:text-gray-200 font-medium text-sm break-all">{proof.file_name}</span>
                                                 <StatusBadge status={proof.status} />
                                             </div>
                                             <a
@@ -303,12 +303,12 @@ const StudentStatus = () => {
 
                         {/* Upload Section */}
                         {application.proof_status === 'not_submitted' && (
-                            <div className="p-6 bg-blue-50 rounded-2xl border-2 border-blue-200">
-                                <h3 className="text-lg font-bold text-gray-800 mb-2 flex items-center gap-2">
-                                    <FileText className="w-5 h-5 text-blue-600" />
+                            <div className="p-6 bg-blue-50 dark:bg-blue-900/20 rounded-2xl border-2 border-blue-200 dark:border-blue-800/50">
+                                <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-2 flex items-center gap-2">
+                                    <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                                     Upload Proof
                                 </h3>
-                                <p className="text-gray-600 text-sm mb-4">
+                                <p className="text-gray-600 dark:text-gray-300 text-sm mb-4">
                                     You can upload your proof document here. It will be reviewed by your MFT.
                                 </p>
                                 <FileUpload
@@ -327,8 +327,8 @@ const StudentStatus = () => {
 
 const DetailItem = ({ label, value }) => (
     <div className="space-y-1">
-        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{label}</span>
-        <p className="text-base text-gray-900 font-medium break-words">{value || 'N/A'}</p>
+        <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{label}</span>
+        <p className="text-base text-gray-900 dark:text-gray-200 font-medium break-words">{value || 'N/A'}</p>
     </div>
 );
 
