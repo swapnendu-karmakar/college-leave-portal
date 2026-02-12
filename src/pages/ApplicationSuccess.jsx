@@ -58,12 +58,12 @@ const ApplicationSuccess = () => {
     };
 
     return (
-        <div className="min-h-screen bg-purple-50 flex items-center justify-center py-8 px-4 sm:py-12">
+        <div className="min-h-screen bg-purple-50 dark:bg-gray-900 flex items-center justify-center py-8 px-4 sm:py-12 transition-colors duration-300">
             <div className="max-w-2xl w-full">
                 {/* Success Card */}
-                <div className="bg-white rounded-3xl shadow-2xl overflow-hidden transform hover:scale-[1.01] transition-transform duration-300">
+                <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl overflow-hidden transform hover:scale-[1.01] transition-all duration-300">
                     {/* Header with animated checkmark */}
-                    <div className="bg-purple-600 p-8 sm:p-12 text-center relative overflow-hidden">
+                    <div className="bg-purple-600 dark:bg-purple-900 p-8 sm:p-12 text-center relative overflow-hidden transition-colors duration-300">
                         <div className="absolute inset-0 bg-white/10 backdrop-blur-sm"></div>
                         <div className="relative z-10">
                             <div className="w-20 h-20 sm:w-24 sm:h-24 bg-white rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-6 animate-bounce shadow-lg">
@@ -76,7 +76,7 @@ const ApplicationSuccess = () => {
 
                     {/* Application ID Section */}
                     <div className="p-6 sm:p-8">
-                        <div className="bg-purple-600 rounded-2xl p-6 sm:p-8 mb-6 sm:mb-8 shadow-lg">
+                        <div className="bg-purple-600 dark:bg-purple-900/80 rounded-2xl p-6 sm:p-8 mb-6 sm:mb-8 shadow-lg transition-colors duration-300">
                             <div className="flex items-center justify-center gap-2 mb-3">
                                 <FileText className="w-5 h-5 text-white" />
                                 <p className="text-white/90 text-xs sm:text-sm font-medium text-center">Your Application ID</p>
@@ -105,7 +105,7 @@ const ApplicationSuccess = () => {
                                 </button>
                                 <button
                                     onClick={handleDownload}
-                                    className="flex-1 flex items-center justify-center gap-2 px-4 sm:px-6 py-3 sm:py-3.5 bg-white hover:bg-gray-50 text-purple-600 rounded-xl font-semibold transition-all hover:scale-105 active:scale-95 shadow-lg"
+                                    className="flex-1 flex items-center justify-center gap-2 px-4 sm:px-6 py-3 sm:py-3.5 bg-white hover:bg-gray-50 text-purple-600 dark:text-purple-700 rounded-xl font-semibold transition-all hover:scale-105 active:scale-95 shadow-lg"
                                 >
                                     <Download className="w-4 h-4 sm:w-5 sm:h-5" />
                                     <span className="text-sm sm:text-base">Download PDF</span>
@@ -114,28 +114,28 @@ const ApplicationSuccess = () => {
                         </div>
 
                         {/* Information Card */}
-                        <div className="bg-blue-50 border-l-4 border-blue-500 p-4 sm:p-6 rounded-xl mb-6 sm:mb-8 shadow-sm">
+                        <div className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 dark:border-blue-400 p-4 sm:p-6 rounded-xl mb-6 sm:mb-8 shadow-sm">
                             <div className="flex items-start gap-3">
                                 <div className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                                     <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                                 </div>
                                 <div className="flex-1">
-                                    <h3 className="font-bold text-blue-900 mb-3 text-sm sm:text-base">Important Information</h3>
-                                    <ul className="space-y-2 sm:space-y-3 text-blue-800 text-xs sm:text-sm">
+                                    <h3 className="font-bold text-blue-900 dark:text-blue-200 mb-3 text-sm sm:text-base">Important Information</h3>
+                                    <ul className="space-y-2 sm:space-y-3 text-blue-800 dark:text-blue-300 text-xs sm:text-sm">
                                         <li className="flex items-start gap-2">
-                                            <span className="text-blue-600 mt-1 flex-shrink-0">•</span>
+                                            <span className="text-blue-600 dark:text-blue-400 mt-1 flex-shrink-0">•</span>
                                             <span>Save your Application ID to track your application status</span>
                                         </li>
                                         <li className="flex items-start gap-2">
-                                            <span className="text-blue-600 mt-1 flex-shrink-0">•</span>
+                                            <span className="text-blue-600 dark:text-blue-400 mt-1 flex-shrink-0">•</span>
                                             <span>Your MFT will review your application</span>
                                         </li>
                                         <li className="flex items-start gap-2">
-                                            <span className="text-blue-600 mt-1 flex-shrink-0">•</span>
+                                            <span className="text-blue-600 dark:text-blue-400 mt-1 flex-shrink-0">•</span>
                                             <span>You can upload proof later if you haven't already</span>
                                         </li>
                                         <li className="flex items-start gap-2">
-                                            <span className="text-blue-600 mt-1 flex-shrink-0">•</span>
+                                            <span className="text-blue-600 dark:text-blue-400 mt-1 flex-shrink-0">•</span>
                                             <span>Check your application status using the link below</span>
                                         </li>
                                     </ul>

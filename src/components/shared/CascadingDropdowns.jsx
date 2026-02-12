@@ -137,7 +137,7 @@ const CascadingDropdowns = ({ onSelectionChange, selectedValues = {} }) => {
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 my-6">
             <div className="flex flex-col gap-2">
-                <label htmlFor="college" className="font-semibold text-gray-700 text-sm">
+                <label htmlFor="college" className="font-semibold text-gray-700 dark:text-gray-300 text-sm">
                     College *
                 </label>
                 <select
@@ -146,7 +146,7 @@ const CascadingDropdowns = ({ onSelectionChange, selectedValues = {} }) => {
                     onChange={handleCollegeChange}
                     disabled={loading}
                     required
-                    className="px-3 py-2 border-2 border-gray-200 rounded-lg text-base bg-white transition-all focus:outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-100 disabled:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer hover:border-purple-400"
+                    className="px-3 py-2 border-2 border-gray-200 dark:border-gray-700 rounded-lg text-base bg-white dark:bg-gray-800 transition-all focus:outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-100 dark:focus:ring-purple-900/30 disabled:bg-gray-100 dark:disabled:bg-gray-900 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer hover:border-purple-400 text-gray-900 dark:text-white"
                 >
                     <option value="">Select College</option>
                     {colleges.map((college) => (
@@ -158,7 +158,7 @@ const CascadingDropdowns = ({ onSelectionChange, selectedValues = {} }) => {
             </div>
 
             <div className="flex flex-col gap-2">
-                <label htmlFor="department" className="font-semibold text-gray-700 text-sm">
+                <label htmlFor="department" className="font-semibold text-gray-700 dark:text-gray-300 text-sm">
                     Department *
                 </label>
                 <select
@@ -167,7 +167,7 @@ const CascadingDropdowns = ({ onSelectionChange, selectedValues = {} }) => {
                     onChange={handleDepartmentChange}
                     disabled={!selectedCollege || loading}
                     required
-                    className="px-3 py-2 border-2 border-gray-200 rounded-lg text-base bg-white transition-all focus:outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-100 disabled:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer hover:border-purple-400"
+                    className="px-3 py-2 border-2 border-gray-200 dark:border-gray-700 rounded-lg text-base bg-white dark:bg-gray-800 transition-all focus:outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-100 dark:focus:ring-purple-900/30 disabled:bg-gray-100 dark:disabled:bg-gray-900 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer hover:border-purple-400 text-gray-900 dark:text-white"
                 >
                     <option value="">Select Department</option>
                     {departments.map((dept) => (
@@ -179,7 +179,7 @@ const CascadingDropdowns = ({ onSelectionChange, selectedValues = {} }) => {
             </div>
 
             <div className="flex flex-col gap-2">
-                <label htmlFor="branch" className="font-semibold text-gray-700 text-sm">
+                <label htmlFor="branch" className="font-semibold text-gray-700 dark:text-gray-300 text-sm">
                     Branch *
                 </label>
                 <select
@@ -188,7 +188,7 @@ const CascadingDropdowns = ({ onSelectionChange, selectedValues = {} }) => {
                     onChange={handleBranchChange}
                     disabled={!selectedDepartment || loading}
                     required
-                    className="px-3 py-2 border-2 border-gray-200 rounded-lg text-base bg-white transition-all focus:outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-100 disabled:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer hover:border-purple-400"
+                    className="px-3 py-2 border-2 border-gray-200 dark:border-gray-700 rounded-lg text-base bg-white dark:bg-gray-800 transition-all focus:outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-100 dark:focus:ring-purple-900/30 disabled:bg-gray-100 dark:disabled:bg-gray-900 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer hover:border-purple-400 text-gray-900 dark:text-white"
                 >
                     <option value="">Select Branch</option>
                     {branches.map((branch) => (
@@ -200,7 +200,7 @@ const CascadingDropdowns = ({ onSelectionChange, selectedValues = {} }) => {
             </div>
 
             <div className="flex flex-col gap-2">
-                <label htmlFor="division" className="font-semibold text-gray-700 text-sm">
+                <label htmlFor="division" className="font-semibold text-gray-700 dark:text-gray-300 text-sm">
                     Division *
                 </label>
                 <select
@@ -209,7 +209,7 @@ const CascadingDropdowns = ({ onSelectionChange, selectedValues = {} }) => {
                     onChange={handleDivisionChange}
                     disabled={!selectedBranch || loading}
                     required
-                    className="px-3 py-2 border-2 border-gray-200 rounded-lg text-base bg-white transition-all focus:outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-100 disabled:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer hover:border-purple-400"
+                    className="px-3 py-2 border-2 border-gray-200 dark:border-gray-700 rounded-lg text-base bg-white dark:bg-gray-800 transition-all focus:outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-100 dark:focus:ring-purple-900/30 disabled:bg-gray-100 dark:disabled:bg-gray-900 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer hover:border-purple-400 text-gray-900 dark:text-white"
                 >
                     <option value="">Select Division</option>
                     {divisions.map((division) => (
