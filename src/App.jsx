@@ -1,35 +1,45 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import Navbar from './components/shared/Navbar';
+import StudentApplication from './pages/StudentApplication';
+import ApplicationSuccess from './pages/ApplicationSuccess';
+import StudentStatus from './pages/StudentStatus';
+import FacultyLogin from './pages/FacultyLogin';
+import FacultyDashboard from './pages/FacultyDashboard';
+import AdminLogin from './pages/AdminLogin';
+import AdminDashboard from './pages/AdminDashboard';
+import './App.css';
 
-function App() {
-  const [count, setCount] = useState(0)
+function AppContent() {
+  const location = useLocation();
+  const showNavbar = !location.pathname.startsWith('/faculty') && !location.pathname.startsWith('/admin');
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    <div className="App">
+      {showNavbar && <Navbar />}
+      <Routes>
+        {/* Student Routes */}
+        <Route path="/" element={<StudentApplication />} />
+        <Route path="/success/:applicationId" element={<ApplicationSuccess />} />
+        <Route path="/status" element={<StudentStatus />} />
+
+        {/* Faculty Routes */}
+        <Route path="/faculty/login" element={<FacultyLogin />} />
+        <Route path="/faculty/dashboard" element={<FacultyDashboard />} />
+
+        {/* Admin Routes */}
+        <Route path="/admin/login" element={<AdminLogin />} />
+        <Route path="/admin/dashboard" element={<AdminDashboard />} />
+      </Routes>
+    </div>
+  );
 }
 
-export default App
+function App() {
+  return (
+    <Router>
+      <AppContent />
+    </Router>
+  );
+}
+
+export default App;
