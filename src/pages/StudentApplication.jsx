@@ -1,148 +1,200 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, User, Mail, Calendar, MessageSquare, Upload, Send, AlertCircle, CheckCircle2, Trash2, Link as LinkIcon, Eye } from 'lucide-react';
-import CascadingDropdowns from '../components/shared/CascadingDropdowns';
+import {
+    FileText, User, Mail, Calendar, MessageSquare, Upload, Send,
+    AlertCircle, CheckCircle2, Trash2, Link as LinkIcon, Eye,
+    KeyRound, ChevronRight, School, Building2, GraduationCap, Users
+} from 'lucide-react';
 import FileUpload from '../components/shared/FileUpload';
 import {
-    verifyStudentEnrollment,
+    getStudentFullDetails,
     createLeaveApplication,
     createProof,
     deleteStorageFile,
 } from '../services/supabase';
-import { validateCollegeEmail, validateDateRange } from '../utils/validators';
+import { sendVerificationOTP, verifyOTP } from '../services/emailService';
+import { validateDateRange } from '../utils/validators';
 
 const StudentApplication = () => {
     const navigate = useNavigate();
+
+    // Wizard Steps: 1 (Enrollment), 2 (OTP), 3 (Application Form)
+    const [step, setStep] = useState(1);
+
+    // Step 1 State
+    const [enrollmentNumber, setEnrollmentNumber] = useState('');
+    const [studentDetails, setStudentDetails] = useState(null);
+
+    // Step 2 State
+    const [otpCode, setOtpCode] = useState('');
+    const [otpSentTime, setOtpSentTime] = useState(null);
+
+    // Step 3 State
     const [formData, setFormData] = useState({
-        enrollmentNumber: '',
-        studentName: '',
-        email: '',
         reason: '',
         leaveType: '',
         fromDate: '',
         toDate: '',
     });
-
-    const [selection, setSelection] = useState({
-        collegeId: '',
-        departmentId: '',
-        branchId: '',
-        divisionId: '',
-        mftId: '',
-    });
-
-    // Changed to an array to hold multiple proofs
     const [uploadedProofs, setUploadedProofs] = useState([]);
-    const [submitting, setSubmitting] = useState(false);
+
+    // General State
+    const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
 
+    const maskEmail = (email) => {
+        if (!email) return '';
+        const [name, domain] = email.split('@');
+        if (name.length <= 2) return `${name[0]}***@${domain}`;
+        return `${name[0]}${name[1]}***${name[name.length - 1]}@${domain}`;
+    };
+
+    // --- Actions ---
+
+    // Step 1 -> 2
+    const handleVerifyEnrollment = async (e) => {
+        e.preventDefault();
+        if (!enrollmentNumber.trim()) {
+            setError('Please enter your enrollment number.');
+            return;
+        }
+
+        try {
+            setLoading(true);
+            setError('');
+            
+            // Fetch student full details
+            const student = await getStudentFullDetails(enrollmentNumber);
+            if (!student) {
+                setError('Student not found. Please check your enrollment number.');
+                return;
+            }
+
+            setStudentDetails(student);
+
+            // Send OTP
+            await sendVerificationOTP(student.email, student.name);
+            setOtpSentTime(Date.now());
+            setStep(2);
+            setSuccess(`OTP sent to your registered email (${maskEmail(student.email)})`);
+            setTimeout(() => setSuccess(''), 5000);
+
+        } catch (err) {
+            console.error(err);
+            setError(err.message || 'Failed to verify enrollment or send OTP.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Step 2 Resend OTP
+    const handleResendOTP = async () => {
+        if (!studentDetails) return;
+        try {
+            setLoading(true);
+            setError('');
+            await sendVerificationOTP(studentDetails.email, studentDetails.name);
+            setOtpSentTime(Date.now());
+            setSuccess('A new OTP has been sent to your email.');
+            setTimeout(() => setSuccess(''), 5000);
+        } catch (err) {
+            setError(err.message || 'Failed to resend OTP.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Step 2 -> 3
+    const handleVerifyOTP = async (e) => {
+        e.preventDefault();
+        if (!otpCode || otpCode.length !== 6) {
+            setError('Please enter a valid 6-digit OTP.');
+            return;
+        }
+
+        try {
+            setLoading(true);
+            setError('');
+
+            await verifyOTP(studentDetails.email, otpCode);
+            
+            setStep(3);
+            setSuccess('Identity verified successfully! Please fill in your leave details.');
+            setTimeout(() => setSuccess(''), 5000);
+        } catch (err) {
+            setError(err.message || 'Invalid OTP.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Step 3 Actions
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setFormData((prev) => ({ ...prev, [name]: value }));
         setError('');
     };
 
-    const handleSelectionChange = (newSelection) => {
-        setSelection(newSelection);
-        setError('');
-    };
-
     const handleProofUpload = (proofData) => {
-        // proofData: { filePath, publicUrl, fileName }
         setUploadedProofs(prev => [...prev, proofData]);
-        setSuccess('Proof attached successfully! You can attach more files if needed.');
+        setSuccess('Proof attached successfully!');
         setTimeout(() => setSuccess(''), 3000);
     };
 
     const handleRemoveProof = async (index) => {
         const proofToRemove = uploadedProofs[index];
         try {
-            // Remove from storage to keep bucket clean
             await deleteStorageFile(proofToRemove.filePath);
-
-            // Update state
             setUploadedProofs(prev => prev.filter((_, i) => i !== index));
             setSuccess('Proof removed successfully.');
             setTimeout(() => setSuccess(''), 3000);
         } catch (err) {
-            console.error('Error removing file:', err);
             setError('Failed to remove file from storage, but removed from list.');
-            // Still remove from list even if storage delete fails
             setUploadedProofs(prev => prev.filter((_, i) => i !== index));
         }
     };
 
-    const handleProofError = (errorMsg) => {
-        setError(errorMsg);
-    };
-
     const validateForm = () => {
-        if (!formData.enrollmentNumber || !formData.studentName || !formData.email) {
-            setError('Please fill in all required fields');
-            return false;
-        }
-
-        if (!validateCollegeEmail(formData.email)) {
-            setError('Please use your college email (@paruluniversity.ac.in)');
-            return false;
-        }
-
-        if (!selection.divisionId) {
-            setError('Please select College, Department, Branch, and Division');
-            return false;
-        }
-
         if (!formData.leaveType || !formData.reason) {
             setError('Please select leave type and provide reason');
             return false;
         }
-
         if (!formData.fromDate || !formData.toDate) {
             setError('Please select leave dates');
             return false;
         }
-
         const dateValidation = validateDateRange(formData.fromDate, formData.toDate);
         if (!dateValidation.valid) {
             setError(dateValidation.message);
             return false;
         }
-
         return true;
     };
 
-    const handleSubmit = async (e) => {
+    const handleSubmitApplication = async (e) => {
         e.preventDefault();
-
         if (!validateForm()) return;
 
         try {
-            setSubmitting(true);
+            setLoading(true);
             setError('');
 
-            const student = await verifyStudentEnrollment(
-                formData.enrollmentNumber,
-                selection.divisionId,
-                formData.studentName,
-                formData.email
-            );
-
-            if (!student) {
-                setError('You are not a student of this division or MFT. Please check your enrollment number and division selection.');
-                setSubmitting(false);
-                return;
-            }
+            // At this point studentDetails has everything we need
+            const { division } = studentDetails;
+            const branch = division.branch;
+            const department = branch.department;
+            const college = department.college;
 
             const application = await createLeaveApplication({
-                enrollment_number: formData.enrollmentNumber,
-                student_name: formData.studentName,
-                email: formData.email,
-                college_id: selection.collegeId,
-                department_id: selection.departmentId,
-                branch_id: selection.branchId,
-                division_id: selection.divisionId,
-                mft_id: selection.mftId,
+                enrollment_number: studentDetails.enrollment_number,
+                student_name: studentDetails.name,
+                email: studentDetails.email,
+                college_id: college.id,
+                department_id: department.id,
+                branch_id: branch.id,
+                division_id: division.id,
+                mft_id: division.mft_id,
                 reason: formData.reason,
                 leave_type: formData.leaveType,
                 from_date: formData.fromDate,
@@ -151,9 +203,7 @@ const StudentApplication = () => {
                 proof_status: uploadedProofs.length > 0 ? 'submitted' : 'not_submitted',
             });
 
-            // Create records for all uploaded proofs
             if (uploadedProofs.length > 0) {
-                // Use Promise.all to upload all proofs in parallel
                 await Promise.all(uploadedProofs.map(proof =>
                     createProof({
                         application_id: application.id,
@@ -169,23 +219,37 @@ const StudentApplication = () => {
             console.error('Error submitting application:', err);
             setError(err.message || 'Failed to submit application. Please try again.');
         } finally {
-            setSubmitting(false);
+            setLoading(false);
         }
     };
+
+    // --- Renderers ---
 
     return (
         <div className="min-h-screen bg-purple-50 dark:bg-gray-900 py-6 sm:py-12 px-4 transition-colors duration-300">
             <div className="max-w-4xl mx-auto">
+                
                 {/* Header Card */}
                 <div className="bg-purple-600 dark:bg-purple-900 text-white rounded-t-3xl p-6 sm:p-10 shadow-xl relative overflow-hidden transition-colors duration-300">
                     <div className="absolute inset-0 bg-white/10 backdrop-blur-sm"></div>
-                    <div className="relative z-10 flex items-center gap-4">
-                        <div className="w-12 h-12 sm:w-16 sm:h-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center">
-                            <FileText className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
+                    <div className="relative z-10 flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 sm:w-16 sm:h-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center">
+                                <FileText className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
+                            </div>
+                            <div>
+                                <h1 className="text-2xl sm:text-4xl font-bold mb-1 sm:mb-2">Apply for Leave</h1>
+                                <p className="text-purple-100 text-sm sm:text-base">Submit your absence application</p>
+                            </div>
                         </div>
-                        <div>
-                            <h1 className="text-2xl sm:text-4xl font-bold mb-1 sm:mb-2">Apply for Leave</h1>
-                            <p className="text-purple-100 text-sm sm:text-base">Fill in the details below to submit your leave application</p>
+
+                        {/* Progress Indicator */}
+                        <div className="hidden sm:flex items-center gap-3 bg-white/10 px-4 py-2 rounded-xl backdrop-blur-sm">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${step >= 1 ? 'bg-white text-purple-600' : 'bg-white/20 text-white'}`}>1</div>
+                            <div className={`w-8 h-1 ${step >= 2 ? 'bg-white' : 'bg-white/20'}`}></div>
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${step >= 2 ? 'bg-white text-purple-600' : 'bg-white/20 text-white'}`}>2</div>
+                            <div className={`w-8 h-1 ${step >= 3 ? 'bg-white' : 'bg-white/20'}`}></div>
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${step >= 3 ? 'bg-white text-purple-600' : 'bg-white/20 text-white'}`}>3</div>
                         </div>
                     </div>
                 </div>
@@ -205,255 +269,325 @@ const StudentApplication = () => {
                     </div>
                 )}
 
-                {/* Form Card */}
-                <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-800 rounded-b-3xl shadow-xl transition-colors duration-300">
-                    {/* Personal Information */}
-                    <div className="p-6 sm:p-8 border-b border-gray-100 dark:border-gray-700">
-                        <div className="flex items-center gap-3 mb-6">
-                            <div className="w-10 h-10 bg-violet-100 dark:bg-violet-900/30 rounded-xl flex items-center justify-center">
-                                <User className="w-5 h-5 text-violet-600 dark:text-violet-400" />
+                <div className="bg-white dark:bg-gray-800 rounded-b-3xl shadow-xl transition-colors duration-300 relative min-h-[400px]">
+                    
+                    {/* STEP 1: ENROLLMENT */}
+                    {step === 1 && (
+                        <div className="p-6 sm:p-12 max-w-2xl mx-auto text-center animate-fade-in">
+                            <div className="w-20 h-20 bg-purple-100 dark:bg-purple-900/40 rounded-full flex items-center justify-center mx-auto mb-6">
+                                <User className="w-10 h-10 text-purple-600 dark:text-purple-400" />
                             </div>
-                            <h2 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-white">Personal Information</h2>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                            <div className="space-y-2">
-                                <label htmlFor="enrollmentNumber" className="flex items-center gap-2 font-semibold text-gray-700 dark:text-gray-300 text-sm">
-                                    <FileText className="w-4 h-4 text-violet-600 dark:text-violet-400" />
-                                    Enrollment Number *
-                                </label>
-                                <input
-                                    type="text"
-                                    id="enrollmentNumber"
-                                    name="enrollmentNumber"
-                                    value={formData.enrollmentNumber}
-                                    onChange={handleInputChange}
-                                    placeholder="e.g., 2203051240100"
-                                    required
-                                    className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-700 rounded-xl text-base transition-all focus:outline-none focus:border-violet-500 focus:ring-4 focus:ring-violet-100 dark:focus:ring-violet-900/30 hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
-                                />
-                            </div>
+                            <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-4">Identify Yourself</h2>
+                            <p className="text-gray-500 dark:text-gray-400 mb-8">
+                                Please enter your enrollment number to let us fetch your academic details. An OTP will be sent to your registered college email.
+                            </p>
 
-                            <div className="space-y-2">
-                                <label htmlFor="studentName" className="flex items-center gap-2 font-semibold text-gray-700 dark:text-gray-300 text-sm">
-                                    <User className="w-4 h-4 text-violet-600 dark:text-violet-400" />
-                                    Full Name *
-                                </label>
-                                <input
-                                    type="text"
-                                    id="studentName"
-                                    name="studentName"
-                                    value={formData.studentName}
-                                    onChange={handleInputChange}
-                                    placeholder="Enter your full name"
-                                    required
-                                    className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-700 rounded-xl text-base transition-all focus:outline-none focus:border-violet-500 focus:ring-4 focus:ring-violet-100 dark:focus:ring-violet-900/30 hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
-                                />
-                            </div>
-
-                            <div className="space-y-2 sm:col-span-2">
-                                <label htmlFor="email" className="flex items-center gap-2 font-semibold text-gray-700 dark:text-gray-300 text-sm">
-                                    <Mail className="w-4 h-4 text-violet-600 dark:text-violet-400" />
-                                    College Email *
-                                </label>
-                                <input
-                                    type="email"
-                                    id="email"
-                                    name="email"
-                                    value={formData.email}
-                                    onChange={handleInputChange}
-                                    placeholder="yourname@paruluniversity.ac.in"
-                                    required
-                                    className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-700 rounded-xl text-base transition-all focus:outline-none focus:border-violet-500 focus:ring-4 focus:ring-violet-100 dark:focus:ring-violet-900/30 hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Academic Details */}
-                    <div className="p-6 sm:p-8 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-                        <div className="flex items-center gap-3 mb-6">
-                            <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center">
-                                <FileText className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                            </div>
-                            <h2 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-white">Academic Details</h2>
-                        </div>
-                        <CascadingDropdowns
-                            onSelectionChange={handleSelectionChange}
-                            selectedValues={selection}
-                        />
-                    </div>
-
-                    {/* Leave Details */}
-                    <div className="p-6 sm:p-8 border-b border-gray-100 dark:border-gray-700">
-                        <div className="flex items-center gap-3 mb-6">
-                            <div className="w-10 h-10 bg-fuchsia-100 dark:bg-fuchsia-900/30 rounded-xl flex items-center justify-center">
-                                <Calendar className="w-5 h-5 text-fuchsia-600 dark:text-fuchsia-400" />
-                            </div>
-                            <h2 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-white">Leave Details</h2>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                            <div className="space-y-2">
-                                <label htmlFor="leaveType" className="flex items-center gap-2 font-semibold text-gray-700 dark:text-gray-300 text-sm">
-                                    <FileText className="w-4 h-4 text-fuchsia-600 dark:text-fuchsia-400" />
-                                    Leave Type *
-                                </label>
-                                <select
-                                    id="leaveType"
-                                    name="leaveType"
-                                    value={formData.leaveType}
-                                    onChange={handleInputChange}
-                                    required
-                                    className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-700 rounded-xl text-base bg-white dark:bg-gray-900 transition-all focus:outline-none focus:border-fuchsia-500 focus:ring-4 focus:ring-fuchsia-100 dark:focus:ring-fuchsia-900/30 cursor-pointer hover:border-gray-300 dark:hover:border-gray-600 text-gray-900 dark:text-white"
-                                >
-                                    <option value="">Select Leave Type</option>
-                                    <option value="Hackathon">Hackathon</option>
-                                    <option value="NCC">NCC</option>
-                                    <option value="Sports">Sports</option>
-                                    <option value="Cultural Event">Cultural Event</option>
-                                    <option value="Medical">Medical</option>
-                                    <option value="Family Emergency">Family Emergency</option>
-                                    <option value="Other">Other</option>
-                                </select>
-                            </div>
-
-                            <div className="space-y-2">
-                                <label htmlFor="fromDate" className="flex items-center gap-2 font-semibold text-gray-700 dark:text-gray-300 text-sm">
-                                    <Calendar className="w-4 h-4 text-fuchsia-600 dark:text-fuchsia-400" />
-                                    From Date *
-                                </label>
-                                <input
-                                    type="date"
-                                    id="fromDate"
-                                    name="fromDate"
-                                    value={formData.fromDate}
-                                    onChange={handleInputChange}
-                                    required
-                                    className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-700 rounded-xl text-base transition-all focus:outline-none focus:border-fuchsia-500 focus:ring-4 focus:ring-fuchsia-100 dark:focus:ring-fuchsia-900/30 hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
-                                />
-                            </div>
-
-                            <div className="space-y-2">
-                                <label htmlFor="toDate" className="flex items-center gap-2 font-semibold text-gray-700 dark:text-gray-300 text-sm">
-                                    <Calendar className="w-4 h-4 text-fuchsia-600 dark:text-fuchsia-400" />
-                                    To Date *
-                                </label>
-                                <input
-                                    type="date"
-                                    id="toDate"
-                                    name="toDate"
-                                    value={formData.toDate}
-                                    onChange={handleInputChange}
-                                    required
-                                    className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-700 rounded-xl text-base transition-all focus:outline-none focus:border-fuchsia-500 focus:ring-4 focus:ring-fuchsia-100 dark:focus:ring-fuchsia-900/30 hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
-                                />
-                            </div>
-
-                            <div className="space-y-2 sm:col-span-2">
-                                <label htmlFor="reason" className="flex items-center gap-2 font-semibold text-gray-700 dark:text-gray-300 text-sm">
-                                    <MessageSquare className="w-4 h-4 text-fuchsia-600 dark:text-fuchsia-400" />
-                                    Reason for Leave *
-                                </label>
-                                <textarea
-                                    id="reason"
-                                    name="reason"
-                                    value={formData.reason}
-                                    onChange={handleInputChange}
-                                    placeholder="Provide detailed reason for your leave application"
-                                    rows="4"
-                                    required
-                                    className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-700 rounded-xl text-base transition-all focus:outline-none focus:border-fuchsia-500 focus:ring-4 focus:ring-fuchsia-100 dark:focus:ring-fuchsia-900/30 resize-none hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Upload Proof */}
-                    <div className="p-6 sm:p-8 bg-gray-50 dark:bg-gray-800/50">
-                        <div className="flex items-center gap-3 mb-2">
-                            <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
-                                <Upload className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                            </div>
-                            <h2 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-white">Upload Proofs (Optional)</h2>
-                        </div>
-
-                        <p className="text-gray-600 text-sm mb-6 ml-14 max-w-2xl">
-                            You can upload multiple files (images or PDFs). Each file will be previewed below.
-                        </p>
-
-                        <div className="w-full max-w-2xl mx-auto grid gap-6">
-                            {/* File Upload Component */}
-                            <FileUpload
-                                applicationId={null} // Will use temp prefix
-                                onUploadSuccess={handleProofUpload}
-                                onUploadError={handleProofError}
-                            />
-
-                            {/* Uploaded Files List */}
-                            {uploadedProofs.length > 0 && (
-                                <div className="space-y-3">
-                                    <h3 className="font-semibold text-gray-700 flex items-center gap-2">
-                                        <LinkIcon className="w-4 h-4" />
-                                        Attached Files ({uploadedProofs.length})
-                                    </h3>
-                                    {uploadedProofs.map((proof, index) => (
-                                        <div key={index} className="flex items-center justify-between p-4 bg-white rounded-xl border border-gray-200 shadow-sm transition-all hover:border-blue-300">
-                                            <div className="flex items-center gap-3 overflow-hidden">
-                                                <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                                                    {proof.fileName.toLowerCase().endsWith('.pdf') ? (
-                                                        <FileText className="w-5 h-5 text-blue-600" />
-                                                    ) : (
-                                                        <Eye className="w-5 h-5 text-blue-600" />
-                                                    )}
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <p className="font-medium text-gray-800 truncate" title={proof.fileName}>{proof.fileName}</p>
-                                                    <a
-                                                        href={proof.publicUrl}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="text-xs text-blue-600 hover:text-blue-800 hover:underline"
-                                                    >
-                                                        View File
-                                                    </a>
-                                                </div>
-                                            </div>
-
-                                            <button
-                                                type="button"
-                                                onClick={() => handleRemoveProof(index)}
-                                                className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                                title="Remove file"
-                                            >
-                                                <Trash2 className="w-5 h-5" />
-                                            </button>
-                                        </div>
-                                    ))}
+                            <form onSubmit={handleVerifyEnrollment}>
+                                <div className="max-w-md mx-auto relative group">
+                                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                        <FileText className="h-5 w-5 text-gray-400 group-focus-within:text-purple-500 transition-colors" />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        required
+                                        autoFocus
+                                        value={enrollmentNumber}
+                                        onChange={(e) => setEnrollmentNumber(e.target.value)}
+                                        className="block w-full pl-12 pr-4 py-4 border-2 border-gray-200 dark:border-gray-700 rounded-xl leading-5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-purple-100 dark:focus:ring-purple-900/30 focus:border-purple-500 transition-all text-lg font-medium tracking-wider text-center"
+                                        placeholder="e.g. 2203051240100"
+                                    />
                                 </div>
-                            )}
+                                <button
+                                    type="submit"
+                                    disabled={loading || !enrollmentNumber}
+                                    className="mt-8 mx-auto flex items-center gap-2 px-8 py-4 bg-purple-600 text-white rounded-xl font-bold shadow-lg hover:bg-purple-700 hover:-translate-y-1 transition-all disabled:opacity-50 disabled:transform-none"
+                                >
+                                    {loading ? 'Verifying...' : 'Send OTP'} 
+                                    {!loading && <ChevronRight className="w-5 h-5" />}
+                                </button>
+                            </form>
                         </div>
-                    </div>
+                    )}
 
-                    {/* Submit Button */}
-                    <div className="p-6 sm:p-8">
-                        <button
-                            type="submit"
-                            disabled={submitting}
-                            className="w-full flex items-center justify-center gap-3 px-8 py-4 bg-purple-600 text-white rounded-xl text-lg font-bold transition-all hover:bg-purple-700 hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none shadow-lg"
-                        >
-                            {submitting ? (
-                                <>
-                                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                    <span>Submitting...</span>
-                                </>
-                            ) : (
-                                <>
-                                    <Send className="w-5 h-5" />
-                                    <span>Submit Application</span>
-                                </>
-                            )}
-                        </button>
-                    </div>
-                </form>
+                    {/* STEP 2: OTP VERIFICATION */}
+                    {step === 2 && (
+                        <div className="p-6 sm:p-12 max-w-2xl mx-auto text-center animate-fade-in">
+                            <div className="w-20 h-20 bg-emerald-100 dark:bg-emerald-900/40 rounded-full flex items-center justify-center mx-auto mb-6">
+                                <KeyRound className="w-10 h-10 text-emerald-600 dark:text-emerald-400" />
+                            </div>
+                            <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">Verify Your Email</h2>
+                            <p className="text-gray-500 dark:text-gray-400 mb-8 max-w-md mx-auto">
+                                We've sent a 6-digit code to <strong>{maskEmail(studentDetails?.email)}</strong>. Code expires in 5 minutes.
+                            </p>
+
+                            <form onSubmit={handleVerifyOTP}>
+                                <div className="max-w-xs mx-auto">
+                                    <input
+                                        type="text"
+                                        required
+                                        autoFocus
+                                        maxLength="6"
+                                        value={otpCode}
+                                        onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
+                                        className="block w-full px-4 py-4 border-2 border-gray-200 dark:border-gray-700 rounded-xl leading-5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-emerald-100 dark:focus:ring-emerald-900/30 focus:border-emerald-500 transition-all text-2xl font-bold tracking-[0.5em] text-center"
+                                        placeholder="000000"
+                                    />
+                                </div>
+                                
+                                <div className="mt-8 flex flex-col items-center gap-4">
+                                    <button
+                                        type="submit"
+                                        disabled={loading || otpCode.length !== 6}
+                                        className="flex items-center gap-2 px-8 py-4 bg-emerald-600 text-white rounded-xl font-bold shadow-lg hover:bg-emerald-700 hover:-translate-y-1 transition-all disabled:opacity-50 disabled:transform-none"
+                                    >
+                                        {loading ? 'Verifying...' : 'Verify OTP'}
+                                    </button>
+                                    
+                                    <button
+                                        type="button"
+                                        onClick={handleResendOTP}
+                                        disabled={loading}
+                                        className="text-sm font-medium text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 disabled:opacity-50"
+                                    >
+                                        Didn't receive code? Resend
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    )}
+
+                    {/* STEP 3: LEAVE FORM (Read-Only Specs + Leave Details) */}
+                    {step === 3 && studentDetails && (
+                        <form onSubmit={handleSubmitApplication} className="animate-fade-in">
+                            
+                            {/* Read-Only Academic Details */}
+                            <div className="p-6 sm:p-8 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30">
+                                <div className="flex items-center gap-3 mb-6">
+                                    <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center">
+                                        <GraduationCap className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-white">Your Profile</h2>
+                                        <p className="text-sm text-gray-500 dark:text-gray-400">Verified academic details</p>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-4 flex gap-3 shadow-sm">
+                                        <User className="w-5 h-5 text-gray-400 mt-0.5" />
+                                        <div>
+                                            <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Name</p>
+                                            <p className="font-medium text-gray-800 dark:text-gray-200">{studentDetails.name}</p>
+                                        </div>
+                                    </div>
+                                    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-4 flex gap-3 shadow-sm">
+                                        <FileText className="w-5 h-5 text-gray-400 mt-0.5" />
+                                        <div>
+                                            <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Enrollment</p>
+                                            <p className="font-medium text-gray-800 dark:text-gray-200">{studentDetails.enrollment_number}</p>
+                                        </div>
+                                    </div>
+                                    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-4 flex gap-3 shadow-sm sm:col-span-2 lg:col-span-1">
+                                        <School className="w-5 h-5 text-gray-400 mt-0.5" />
+                                        <div>
+                                            <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">College</p>
+                                            <p className="font-medium text-gray-800 dark:text-gray-200">{studentDetails.division.branch.department.college.name}</p>
+                                        </div>
+                                    </div>
+                                    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-4 flex gap-3 shadow-sm">
+                                        <Building2 className="w-5 h-5 text-gray-400 mt-0.5" />
+                                        <div>
+                                            <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Department & Branch</p>
+                                            <p className="font-medium text-gray-800 dark:text-gray-200">
+                                                {studentDetails.division.branch.department.name} • {studentDetails.division.branch.name}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-4 flex gap-3 shadow-sm">
+                                        <Users className="w-5 h-5 text-gray-400 mt-0.5" />
+                                        <div>
+                                            <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Division & Semester</p>
+                                            <p className="font-medium text-gray-800 dark:text-gray-200">
+                                                {studentDetails.division.code} (Sem {studentDetails.division.semester})
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Leave Details Form */}
+                            <div className="p-6 sm:p-8 border-b border-gray-100 dark:border-gray-700">
+                                <div className="flex items-center gap-3 mb-6">
+                                    <div className="w-10 h-10 bg-fuchsia-100 dark:bg-fuchsia-900/30 rounded-xl flex items-center justify-center">
+                                        <Calendar className="w-5 h-5 text-fuchsia-600 dark:text-fuchsia-400" />
+                                    </div>
+                                    <h2 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-white">Leave Details</h2>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                                    <div className="space-y-2">
+                                        <label htmlFor="leaveType" className="flex items-center gap-2 font-semibold text-gray-700 dark:text-gray-300 text-sm">
+                                            <FileText className="w-4 h-4 text-fuchsia-600 dark:text-fuchsia-400" />
+                                            Leave Type *
+                                        </label>
+                                        <select
+                                            id="leaveType"
+                                            name="leaveType"
+                                            value={formData.leaveType}
+                                            onChange={handleInputChange}
+                                            required
+                                            className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-700 rounded-xl text-base bg-white dark:bg-gray-900 transition-all focus:outline-none focus:border-fuchsia-500 focus:ring-4 focus:ring-fuchsia-100 dark:focus:ring-fuchsia-900/30 cursor-pointer hover:border-gray-300 dark:hover:border-gray-600 text-gray-900 dark:text-white"
+                                        >
+                                            <option value="">Select Leave Type</option>
+                                            <option value="Hackathon">Hackathon</option>
+                                            <option value="NCC">NCC</option>
+                                            <option value="Sports">Sports</option>
+                                            <option value="Cultural Event">Cultural Event</option>
+                                            <option value="Medical">Medical</option>
+                                            <option value="Family Emergency">Family Emergency</option>
+                                            <option value="Other">Other</option>
+                                        </select>
+                                    </div>
+
+                                    <div className="space-y-4 sm:space-y-0 sm:flex sm:gap-4 sm:col-span-2">
+                                        <div className="space-y-2 flex-1">
+                                            <label htmlFor="fromDate" className="flex items-center gap-2 font-semibold text-gray-700 dark:text-gray-300 text-sm">
+                                                <Calendar className="w-4 h-4 text-fuchsia-600 dark:text-fuchsia-400" />
+                                                From Date *
+                                            </label>
+                                            <input
+                                                type="date"
+                                                id="fromDate"
+                                                name="fromDate"
+                                                value={formData.fromDate}
+                                                onChange={handleInputChange}
+                                                required
+                                                className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-700 rounded-xl text-base transition-all focus:outline-none focus:border-fuchsia-500 focus:ring-4 focus:ring-fuchsia-100 dark:focus:ring-fuchsia-900/30 hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                                            />
+                                        </div>
+
+                                        <div className="space-y-2 flex-1">
+                                            <label htmlFor="toDate" className="flex items-center gap-2 font-semibold text-gray-700 dark:text-gray-300 text-sm">
+                                                <Calendar className="w-4 h-4 text-fuchsia-600 dark:text-fuchsia-400" />
+                                                To Date *
+                                            </label>
+                                            <input
+                                                type="date"
+                                                id="toDate"
+                                                name="toDate"
+                                                value={formData.toDate}
+                                                onChange={handleInputChange}
+                                                required
+                                                className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-700 rounded-xl text-base transition-all focus:outline-none focus:border-fuchsia-500 focus:ring-4 focus:ring-fuchsia-100 dark:focus:ring-fuchsia-900/30 hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2 sm:col-span-2">
+                                        <label htmlFor="reason" className="flex items-center gap-2 font-semibold text-gray-700 dark:text-gray-300 text-sm">
+                                            <MessageSquare className="w-4 h-4 text-fuchsia-600 dark:text-fuchsia-400" />
+                                            Reason for Leave *
+                                        </label>
+                                        <textarea
+                                            id="reason"
+                                            name="reason"
+                                            value={formData.reason}
+                                            onChange={handleInputChange}
+                                            placeholder="Provide detailed reason for your leave application"
+                                            rows="4"
+                                            required
+                                            className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-700 rounded-xl text-base transition-all focus:outline-none focus:border-fuchsia-500 focus:ring-4 focus:ring-fuchsia-100 dark:focus:ring-fuchsia-900/30 resize-none hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Upload Proof */}
+                            <div className="p-6 sm:p-8 bg-gray-50 dark:bg-gray-800/50">
+                                <div className="flex items-center gap-3 mb-2">
+                                    <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
+                                        <Upload className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                                    </div>
+                                    <h2 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-white">Upload Proofs (Optional)</h2>
+                                </div>
+                                <p className="text-gray-600 text-sm mb-6 ml-14 max-w-2xl">
+                                    Attach supporting documents like medical certificates, event invitations, etc.
+                                </p>
+
+                                <div className="w-full max-w-2xl mx-auto grid gap-6">
+                                    <FileUpload
+                                        applicationId={null} 
+                                        onUploadSuccess={handleProofUpload}
+                                        onUploadError={(msg) => setError(msg)}
+                                    />
+
+                                    {uploadedProofs.length > 0 && (
+                                        <div className="space-y-3">
+                                            <h3 className="font-semibold text-gray-700 flex items-center gap-2">
+                                                <LinkIcon className="w-4 h-4" />
+                                                Attached Files ({uploadedProofs.length})
+                                            </h3>
+                                            {uploadedProofs.map((proof, index) => (
+                                                <div key={index} className="flex items-center justify-between p-4 bg-white rounded-xl border border-gray-200 shadow-sm transition-all hover:border-blue-300">
+                                                    <div className="flex items-center gap-3 overflow-hidden">
+                                                        <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center flex-shrink-0">
+                                                            {proof.fileName.toLowerCase().endsWith('.pdf') ? (
+                                                                <FileText className="w-5 h-5 text-blue-600" />
+                                                            ) : (
+                                                                <Eye className="w-5 h-5 text-blue-600" />
+                                                            )}
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <p className="font-medium text-gray-800 truncate" title={proof.fileName}>{proof.fileName}</p>
+                                                            <a
+                                                                href={proof.publicUrl}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                                                            >
+                                                                View File
+                                                            </a>
+                                                        </div>
+                                                    </div>
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRemoveProof(index)}
+                                                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                                        title="Remove file"
+                                                    >
+                                                        <Trash2 className="w-5 h-5" />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Submit Button */}
+                            <div className="p-6 sm:p-8">
+                                <button
+                                    type="submit"
+                                    disabled={loading}
+                                    className="w-full flex items-center justify-center gap-3 px-8 py-4 bg-purple-600 text-white rounded-xl text-lg font-bold transition-all hover:bg-purple-700 hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none shadow-lg"
+                                >
+                                    {loading ? (
+                                        <>
+                                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                            <span>Submitting...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Send className="w-5 h-5" />
+                                            <span>Submit Leave Application</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </form>
+                    )}
+
+                </div>
             </div>
         </div>
     );

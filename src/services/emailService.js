@@ -1,71 +1,99 @@
-// API base URL
 const API_URL = 'http://localhost:3000/api';
 
-// Send MFT credentials email
-export const sendMFTCredentials = async (mftEmail, mftName, password, role = 'MFT') => {
-  try {
-    const response = await fetch(`${API_URL}/send-credentials`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        email: mftEmail,
-        name: mftName,
-        password: password,
-        role: role,
-      }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to send email');
-    }
-
-    const data = await response.json();
-    console.log('MFT credentials email sent:', data.messageId);
-    return { success: true, messageId: data.messageId };
-  } catch (error) {
-    console.error('Error sending MFT credentials email:', error);
-    throw error;
-  }
+// Safe JSON parser — returns null if response is not JSON (e.g. 404 HTML page)
+const safeJson = async (response) => {
+    const text = await response.text();
+    try { return JSON.parse(text); } catch { return null; }
 };
 
-// Send rejection notification email
-export const sendRejectionNotification = async (
-  facultyEmail,
-  studentName,
-  enrollmentNumber,
-  applicationId,
-  divisionCode,
-  reason
-) => {
-  try {
-    const response = await fetch(`${API_URL}/send-rejection`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        email: facultyEmail,
-        studentName,
-        enrollmentNumber,
-        applicationId,
-        divisionCode,
-        reason,
-      }),
+/**
+ * Send MFT login credentials (email + generated password) to an MFT user.
+ * @param {string} mftEmail   - Recipient email address
+ * @param {string} mftName    - Recipient display name
+ * @param {string} password   - Plain-text password (NOT the hash)
+ */
+export const sendMFTCredentials = async (mftEmail, mftName, password) => {
+    const response = await fetch(`${API_URL}/send-mft-credentials`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: mftEmail, name: mftName, password }),
     });
 
+    const data = await safeJson(response);
+
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to send email');
+        throw new Error(
+            data?.error ||
+            `Server error ${response.status}: ${response.statusText}. Make sure your backend server is running and has the /api/send-mft-credentials route.`
+        );
     }
 
-    const data = await response.json();
-    console.log('Rejection notification email sent:', data.messageId);
-    return { success: true, messageId: data.messageId };
-  } catch (error) {
-    console.error('Error sending rejection notification email:', error);
-    throw error;
-  }
+    console.log('MFT credentials email sent:', data?.messageId);
+    return { success: true, messageId: data?.messageId };
+};
+
+/**
+ * Send rejection notification email to faculty.
+ */
+export const sendRejectionNotification = async (
+    facultyEmail,
+    studentName,
+    enrollmentNumber,
+    applicationId,
+    divisionCode,
+    reason
+) => {
+    const response = await fetch(`${API_URL}/send-rejection`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: facultyEmail, studentName, enrollmentNumber, applicationId, divisionCode, reason }),
+    });
+
+    const data = await safeJson(response);
+
+    if (!response.ok) {
+        throw new Error(data?.error || `Server error ${response.status}: ${response.statusText}`);
+    }
+
+    console.log('Rejection notification email sent:', data?.messageId);
+    return { success: true, messageId: data?.messageId };
+};
+
+/**
+ * Send verification OTP to student email.
+ */
+export const sendVerificationOTP = async (email, studentName) => {
+    const response = await fetch(`${API_URL}/send-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, studentName }),
+    });
+
+    const data = await safeJson(response);
+
+    if (!response.ok) {
+        throw new Error(data?.error || `Server error ${response.status}: ${response.statusText}`);
+    }
+
+    console.log('OTP sent successfully:', data?.messageId);
+    return { success: true, messageId: data?.messageId };
+};
+
+/**
+ * Verify OTP submitted by student.
+ */
+export const verifyOTP = async (email, otp) => {
+    const response = await fetch(`${API_URL}/verify-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, otp }),
+    });
+
+    const data = await safeJson(response);
+
+    if (!response.ok) {
+        throw new Error(data?.error || `Server error ${response.status}: ${response.statusText}`);
+    }
+
+    return { success: true };
 };

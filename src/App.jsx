@@ -7,6 +7,7 @@ import FacultyLogin from './pages/FacultyLogin';
 import FacultyDashboard from './pages/FacultyDashboard';
 import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
+import MFTSetup from './pages/MFTSetup';
 import './App.css';
 
 function AppContent() {
@@ -29,6 +30,9 @@ function AppContent() {
         {/* Admin Routes */}
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
+
+        {/* Setup Routes */}
+        <Route path="/mft-setup" element={<MFTSetup />} />
       </Routes>
     </div>
   );
