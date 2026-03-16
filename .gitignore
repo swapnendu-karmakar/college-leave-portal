@@ -14,8 +14,8 @@ dist-ssr
 .env
 STORAGE_SETUP.md
 generate_demo.mjs
-public/demo_upload.xlsx
 supabase/
+leave_portal.xlsx
 udp_log_book.md
 
 # Editor directories and files
