@@ -8,7 +8,14 @@ const supabaseServiceKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // Admin client with service role for privileged operations
-export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
+    detectSessionInUrl: false,
+    storageKey: 'supabase-admin-auth', // prevents GoTrueClient duplicate warning
+  }
+});
 
 // ============= COLLEGE OPERATIONS =============
 export const getColleges = async () => {
@@ -193,10 +200,14 @@ export const deleteDivision = async (id) => {
 };
 
 // ============= MFT OPERATIONS =============
+
+// ✅ FIX: include password_hash so the dashboard knows whether a password
+//    has already been set (used to show "Generate" vs "Regenerate").
+//    The hash itself is never displayed — only its presence is checked.
 export const getAllMFTs = async () => {
   const { data, error } = await supabaseAdmin
     .from('mft')
-    .select('id, name, email, created_at, divisions(id, code, semester, batch_number)')
+    .select('id, name, email, password_hash, created_at, invite_sent, divisions(id, code, semester, batch_number)')
     .order('name');
 
   if (error) throw error;
@@ -206,8 +217,32 @@ export const getAllMFTs = async () => {
 export const createMFT = async (mft) => {
   const { data, error } = await supabaseAdmin
     .from('mft')
-    .insert(mft)
-    .select('id, name, email, created_at')
+    .insert({ ...mft, invite_sent: false })
+    .select('id, name, email, invite_sent, created_at')
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
+export const setupMFTPassword = async (email, password_hash) => {
+  const { data, error } = await supabaseAdmin
+    .from('mft')
+    .update({ password_hash })
+    .eq('email', email)
+    .select('id, name, email')
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
+export const setMFTInviteSent = async (email) => {
+  const { data, error } = await supabaseAdmin
+    .from('mft')
+    .update({ invite_sent: true })
+    .eq('email', email)
+    .select('id, name, email, invite_sent')
     .single();
 
   if (error) throw error;
@@ -268,6 +303,40 @@ export const getStudentsByDivision = async (divisionId) => {
   return data;
 };
 
+export const getStudentFullDetails = async (enrollmentNumber) => {
+  const { data, error } = await supabase
+    .from('students')
+    .select(`
+      *,
+      division:division_id (
+        id,
+        code,
+        semester,
+        batch_number,
+        mft_id,
+        branch:branch_id (
+          id,
+          name,
+          code,
+          department:department_id (
+            id,
+            name,
+            college:college_id (
+              id,
+              name,
+              code
+            )
+          )
+        )
+      )
+    `)
+    .eq('enrollment_number', enrollmentNumber)
+    .single();
+
+  if (error && error.code !== 'PGRST116') throw error;
+  return data || null;
+};
+
 export const verifyStudentEnrollment = async (enrollmentNumber, divisionId, studentName, email) => {
   const { data, error } = await supabase
     .from('students')
@@ -276,21 +345,14 @@ export const verifyStudentEnrollment = async (enrollmentNumber, divisionId, stud
     .eq('division_id', divisionId)
     .single();
 
-  if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows returned
+  if (error && error.code !== 'PGRST116') throw error;
 
   if (!data) return null;
 
-  // Validate name (case-insensitive) and email
-  const nameMatch = data.name.trim().toLowerCase() === studentName.trim().toLowerCase();
+  const nameMatch  = data.name.trim().toLowerCase()  === studentName.trim().toLowerCase();
   const emailMatch = data.email.trim().toLowerCase() === email.trim().toLowerCase();
 
-  // Also check if mft_id matches? No, mft_id is in division table, student table has division_id.
-
   if (!nameMatch || !emailMatch) {
-    // Return a special object or throw error to distinguish from "not found"
-    // But for simplicity in UI, we can just return null or throw.
-    // The UI currently checks `if (!student)`.
-    // Let's throw a specific error so we can show it to the user.
     throw new Error('Student name or email does not match the enrollment record.');
   }
 
@@ -309,9 +371,10 @@ export const createStudent = async (student) => {
 };
 
 export const bulkCreateStudents = async (students) => {
+  const uniqueStudents = deduplicateBy(students, s => s.enrollment_number);
   const { data, error } = await supabaseAdmin
     .from('students')
-    .insert(students)
+    .upsert(uniqueStudents, { onConflict: 'enrollment_number' })
     .select();
 
   if (error) throw error;
@@ -538,6 +601,225 @@ export const updateAdminPassword = async (id, passwordHash) => {
     .eq('id', id)
     .select('id, email')
     .single();
+
+  if (error) throw error;
+  return data;
+};
+
+// ============= BULK UPLOAD OPERATIONS =============
+
+// Helper: deduplicate array by key function (keeps last occurrence)
+const deduplicateBy = (arr, keyFn) => {
+  const map = new Map();
+  arr.forEach((item) => {
+    const key = keyFn(item);
+    if (key) map.set(key, item);
+  });
+  return [...map.values()];
+};
+
+export const bulkCreateColleges = async (colleges) => {
+  const uniqueColleges = deduplicateBy(colleges, c => c.code);
+  const { data, error } = await supabaseAdmin
+    .from('colleges')
+    .upsert(uniqueColleges, { onConflict: 'code' })
+    .select();
+
+  if (error) throw error;
+  return data;
+};
+
+export const bulkCreateDepartments = async (departments) => {
+  const uniqueDepartments = deduplicateBy(departments, d => `${d.college_id}_${d.name}`);
+  const { data, error } = await supabaseAdmin
+    .from('departments')
+    .upsert(uniqueDepartments, { onConflict: 'college_id,name' })
+    .select();
+
+  if (error) throw error;
+  return data;
+};
+
+export const bulkCreateBranches = async (branches) => {
+  const uniqueBranches = deduplicateBy(branches, b => `${b.department_id}_${b.code}`);
+
+  const { data: existing } = await supabaseAdmin.from('branches').select('department_id, code');
+  const existingSet = new Set((existing || []).map(b => `${b.department_id}_${b.code}`));
+  const newBranches = uniqueBranches.filter(b => !existingSet.has(`${b.department_id}_${b.code}`));
+
+  if (newBranches.length === 0) return [];
+
+  const { data, error } = await supabaseAdmin
+    .from('branches')
+    .insert(newBranches)
+    .select();
+
+  if (error) throw error;
+  return data;
+};
+
+export const bulkCreateDivisions = async (divisions) => {
+  const uniqueDivisions = deduplicateBy(divisions, d => d.code);
+  const { data, error } = await supabaseAdmin
+    .from('divisions')
+    .upsert(uniqueDivisions, { onConflict: 'code' })
+    .select();
+
+  if (error) throw error;
+  return data;
+};
+
+export const bulkCreateFaculty = async (facultyList) => {
+  const uniqueFaculty = deduplicateBy(facultyList, f => `${f.division_id}_${f.email}`);
+
+  const { data: existing } = await supabaseAdmin.from('faculty').select('division_id, email');
+  const existingSet = new Set((existing || []).map(f => `${f.division_id}_${f.email}`));
+  const newFaculty = uniqueFaculty.filter(f => !existingSet.has(`${f.division_id}_${f.email}`));
+
+  if (newFaculty.length === 0) return [];
+
+  const { data, error } = await supabaseAdmin
+    .from('faculty')
+    .insert(newFaculty)
+    .select();
+
+  if (error) throw error;
+  return data;
+};
+
+export const bulkCreateMFTs = async (mfts) => {
+  const uniqueMFTs = deduplicateBy(mfts, m => m.email);
+
+  // Fetch ALL existing MFTs so we can match by name (handles email changes)
+  const { data: existing, error: fetchError } = await supabaseAdmin
+    .from('mft')
+    .select('id, name, email');
+  if (fetchError) throw fetchError;
+
+  // Build lookup maps
+  const byEmail = new Map((existing || []).map(m => [m.email.trim().toLowerCase(), m]));
+  const byName  = new Map((existing || []).map(m => [m.name.trim().toLowerCase(),  m]));
+
+  const toInsert = [];
+  const toUpdate = []; // { id, name, email }
+
+  for (const m of uniqueMFTs) {
+    const emailKey = m.email.trim().toLowerCase();
+    const nameKey  = m.name.trim().toLowerCase();
+
+    if (byEmail.has(emailKey)) {
+      // Exact email match — update name in case it changed (no-op if same)
+      toUpdate.push({ id: byEmail.get(emailKey).id, name: m.name, email: m.email });
+    } else if (byName.has(nameKey)) {
+      // Same person, email changed — update the email on the existing row
+      toUpdate.push({ id: byName.get(nameKey).id, name: m.name, email: m.email });
+    } else {
+      // Brand new MFT
+      toInsert.push({ ...m, invite_sent: false });
+    }
+  }
+
+  const results = [];
+
+  // Insert new MFTs
+  if (toInsert.length > 0) {
+    const { data, error } = await supabaseAdmin
+      .from('mft')
+      .insert(toInsert)
+      .select('id, name, email, password_hash, invite_sent, created_at');
+    if (error) throw error;
+    results.push(...(data || []));
+  }
+
+  // Update existing MFTs one by one (Supabase doesn't support bulk update with different values)
+  for (const m of toUpdate) {
+    const { data, error } = await supabaseAdmin
+      .from('mft')
+      .update({ name: m.name, email: m.email })
+      .eq('id', m.id)
+      .select('id, name, email, password_hash, invite_sent, created_at')
+      .single();
+    if (error) throw error;
+    if (data) results.push(data);
+  }
+
+  return results;
+};
+
+export const getAllDivisionsWithHierarchy = async () => {
+  const { data, error } = await supabaseAdmin
+    .from('divisions')
+    .select(`
+      id,
+      code,
+      semester,
+      batch_number,
+      mft_id,
+      branch:branch_id (
+        id,
+        name,
+        code,
+        department:department_id (
+          id,
+          name,
+          college:college_id (
+            id,
+            name,
+            code
+          )
+        )
+      )
+    `);
+
+  if (error) throw error;
+  return data;
+};
+
+export const getAllColleges = async () => {
+  const { data, error } = await supabaseAdmin
+    .from('colleges')
+    .select('*')
+    .order('name');
+
+  if (error) throw error;
+  return data;
+};
+
+export const getAllDepartments = async () => {
+  const { data, error } = await supabaseAdmin
+    .from('departments')
+    .select('*, college:college_id(id, name, code)')
+    .order('name');
+
+  if (error) throw error;
+  return data;
+};
+
+export const getAllBranches = async () => {
+  const { data, error } = await supabaseAdmin
+    .from('branches')
+    .select('*, department:department_id(id, name, college:college_id(id, name, code))')
+    .order('name');
+
+  if (error) throw error;
+  return data;
+};
+
+export const getAllStudents = async () => {
+  const { data, error } = await supabaseAdmin
+    .from('students')
+    .select('*, division:division_id(id, code, branch:branch_id(id, name))')
+    .order('name');
+
+  if (error) throw error;
+  return data;
+};
+
+export const getAllFaculty = async () => {
+  const { data, error } = await supabaseAdmin
+    .from('faculty')
+    .select('*, division:division_id(id, code, branch:branch_id(id, name))')
+    .order('name');
 
   if (error) throw error;
   return data;
