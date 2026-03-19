@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import nodemailer from 'nodemailer';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
@@ -30,8 +31,7 @@ const createTransporter = () => {
   });
 };
 
-// In-memory OTP storage: { email: { otp: string, expiresAt: number } }
-const otpStore = new Map();
+// No in-memory state! This allows Serverless Functions (Vercel) to scale dynamically.
 
 // Helper to generate 6-digit OTP
 const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
@@ -47,10 +47,11 @@ app.post('/api/send-otp', async (req, res) => {
   }
 
   const otp = generateOTP();
-  otpStore.set(email, {
-    otp,
-    expiresAt: Date.now() + 5 * 60 * 1000,
-  });
+  const expiresAt = Date.now() + 5 * 60 * 1000;
+  
+  // Create stateless verification hash
+  const dataToHash = `${email}.${otp}.${expiresAt}`;
+  const hash = crypto.createHmac('sha256', process.env.VITE_SUPABASE_ANON_KEY || 'fallback_secret_key_123').update(dataToHash).digest('hex');
 
   try {
     const transporter = createTransporter();
@@ -91,7 +92,7 @@ app.post('/api/send-otp', async (req, res) => {
     });
 
     console.log(`OTP sent to ${email} (Message ID: ${info.messageId})`);
-    res.status(200).json({ success: true, messageId: info.messageId });
+    res.status(200).json({ success: true, messageId: info.messageId, hash, expiresAt });
   } catch (error) {
     console.error('Error sending OTP email:', error);
     res.status(500).json({ error: 'Failed to send OTP email' });
@@ -102,28 +103,23 @@ app.post('/api/send-otp', async (req, res) => {
 // POST /api/verify-otp
 // ─────────────────────────────────────────────
 app.post('/api/verify-otp', (req, res) => {
-  const { email, otp } = req.body;
+  const { email, otp, hash, expiresAt } = req.body;
 
-  if (!email || !otp) {
-    return res.status(400).json({ error: 'Missing email or OTP' });
+  if (!email || !otp || !hash || !expiresAt) {
+    return res.status(400).json({ error: 'Missing required OTP verification data' });
   }
 
-  const storedData = otpStore.get(email);
-
-  if (!storedData) {
-    return res.status(400).json({ error: 'No OTP found for this email. Please request a new one.' });
-  }
-
-  if (Date.now() > storedData.expiresAt) {
-    otpStore.delete(email);
+  if (Date.now() > expiresAt) {
     return res.status(400).json({ error: 'OTP has expired. Please request a new one.' });
   }
 
-  if (storedData.otp !== otp) {
+  const dataToHash = `${email}.${otp}.${expiresAt}`;
+  const expectedHash = crypto.createHmac('sha256', process.env.VITE_SUPABASE_ANON_KEY || 'fallback_secret_key_123').update(dataToHash).digest('hex');
+
+  if (hash !== expectedHash) {
     return res.status(400).json({ error: 'Invalid OTP format or incorrect code.' });
   }
 
-  otpStore.delete(email);
   res.status(200).json({ success: true, message: 'OTP verified successfully' });
 });
 

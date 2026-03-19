@@ -76,17 +76,17 @@ export const sendVerificationOTP = async (email, studentName) => {
     }
 
     console.log('OTP sent successfully:', data?.messageId);
-    return { success: true, messageId: data?.messageId };
+    return { success: true, messageId: data?.messageId, hash: data?.hash, expiresAt: data?.expiresAt };
 };
 
 /**
  * Verify OTP submitted by student.
  */
-export const verifyOTP = async (email, otp) => {
+export const verifyOTP = async (email, otp, hash, expiresAt) => {
     const response = await fetch(`${API_URL}/verify-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, otp }),
+        body: JSON.stringify({ email, otp, hash, expiresAt }),
     });
 
     const data = await safeJson(response);
