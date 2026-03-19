@@ -28,6 +28,8 @@ const StudentApplication = () => {
     // Step 2 State
     const [otpCode, setOtpCode] = useState('');
     const [otpSentTime, setOtpSentTime] = useState(null);
+    const [otpHash, setOtpHash] = useState(null);
+    const [otpExpiresAt, setOtpExpiresAt] = useState(null);
 
     // Step 3 State
     const [formData, setFormData] = useState({
@@ -74,7 +76,9 @@ const StudentApplication = () => {
             setStudentDetails(student);
 
             // Send OTP
-            await sendVerificationOTP(student.email, student.name);
+            const response = await sendVerificationOTP(student.email, student.name);
+            setOtpHash(response.hash);
+            setOtpExpiresAt(response.expiresAt);
             setOtpSentTime(Date.now());
             setStep(2);
             setSuccess(`OTP sent to your registered email (${maskEmail(student.email)})`);
@@ -94,7 +98,9 @@ const StudentApplication = () => {
         try {
             setLoading(true);
             setError('');
-            await sendVerificationOTP(studentDetails.email, studentDetails.name);
+            const response = await sendVerificationOTP(studentDetails.email, studentDetails.name);
+            setOtpHash(response.hash);
+            setOtpExpiresAt(response.expiresAt);
             setOtpSentTime(Date.now());
             setSuccess('A new OTP has been sent to your email.');
             setTimeout(() => setSuccess(''), 5000);
@@ -117,7 +123,7 @@ const StudentApplication = () => {
             setLoading(true);
             setError('');
 
-            await verifyOTP(studentDetails.email, otpCode);
+            await verifyOTP(studentDetails.email, otpCode, otpHash, otpExpiresAt);
             
             setStep(3);
             setSuccess('Identity verified successfully! Please fill in your leave details.');
