@@ -13,7 +13,8 @@ import {
     ChevronDown,
     Search,
     GraduationCap,
-    School
+    School,
+    MessageSquare
 } from 'lucide-react';
 import {
     getMFTDivisions,
@@ -24,10 +25,13 @@ import {
     updateProofStatus,
     updateProofReviewStatus,
     updateMFTPassword,
+    updateApplicationFacultyRemark,
+    getApplicationById,
 } from '../services/supabase';
-import { sendRejectionNotification } from '../services/emailService';
+import { sendRejectionNotification, sendStudentNotification } from '../services/emailService';
 import StatusBadge from '../components/shared/StatusBadge';
 import { formatDate, getProofStatusText, hashPassword } from '../utils/validators';
+import { generateApplicationPDF } from '../utils/pdfGenerator';
 import { useTheme } from '../context/ThemeContext';
 import { Sun, Moon } from 'lucide-react';
 
@@ -46,6 +50,11 @@ const FacultyDashboard = () => {
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [showPasswordModal, setShowPasswordModal] = useState(false);
+
+    // Remark Modal State
+    const [showRemarkModal, setShowRemarkModal] = useState(false);
+    const [selectedAppForRemark, setSelectedAppForRemark] = useState(null);
+    const [remarkText, setRemarkText] = useState('');
 
     useEffect(() => {
         const mftData = sessionStorage.getItem('mft');
@@ -133,12 +142,48 @@ const FacultyDashboard = () => {
                 }
             }
 
+            try {
+                const fullApp = await getApplicationById(application.application_id);
+                const pdfBase64 = generateApplicationPDF(fullApp, 'datauristring');
+                await sendStudentNotification(
+                    application.email,
+                    application.student_name,
+                    application.application_id,
+                    'approved',
+                    pdfBase64
+                );
+            } catch (err) {
+                console.error('Failed to notify student:', err);
+            }
+
             const updatedApplications = await getApplicationsByMFT(mft.id);
             setApplications(updatedApplications);
             alert('Application approved successfully!');
         } catch (err) {
             console.error('Error approving application:', err);
             alert('Failed to approve application');
+        }
+    };
+
+    const handleAddRemarkSubmit = async (e) => {
+        e.preventDefault();
+        if (!remarkText.trim() || !selectedAppForRemark) return;
+
+        try {
+            setLoading(true);
+            await updateApplicationFacultyRemark(selectedAppForRemark.id, remarkText.trim());
+            
+            const updatedApplications = await getApplicationsByMFT(mft.id);
+            setApplications(updatedApplications);
+            setSuccess('Remark added successfully!');
+            setTimeout(() => setSuccess(''), 3000);
+            setShowRemarkModal(false);
+            setRemarkText('');
+        } catch (err) {
+            console.error('Error adding remark:', err);
+            setError('Failed to add remark');
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -176,6 +221,21 @@ const FacultyDashboard = () => {
 
             await Promise.allSettled(emailPromises);
             console.log(`Rejection notifications sent to ${divisionFaculty.length} faculty members.`);
+
+            // Notify Student
+            try {
+                const fullApp = await getApplicationById(application.application_id);
+                const pdfBase64 = generateApplicationPDF(fullApp, 'datauristring');
+                await sendStudentNotification(
+                    application.email,
+                    application.student_name,
+                    application.application_id,
+                    'rejected',
+                    pdfBase64
+                );
+            } catch (err) {
+                console.error('Failed to notify student:', err);
+            }
 
             // 3. Refresh UI
             const updatedApplications = await getApplicationsByMFT(mft.id);
@@ -384,6 +444,11 @@ const FacultyDashboard = () => {
                                                     applications={divisionApps}
                                                     onApprove={handleApprove}
                                                     onReject={handleReject}
+                                                    onRemark={(app) => {
+                                                        setSelectedAppForRemark(app);
+                                                        setRemarkText(app.faculty_remark || '');
+                                                        setShowRemarkModal(true);
+                                                    }}
                                                 />
                                             </div>
                                         </div>
@@ -407,6 +472,11 @@ const FacultyDashboard = () => {
                                         applications={filteredApplications}
                                         onApprove={handleApprove}
                                         onReject={handleReject}
+                                        onRemark={(app) => {
+                                            setSelectedAppForRemark(app);
+                                            setRemarkText(app.faculty_remark || '');
+                                            setShowRemarkModal(true);
+                                        }}
                                     />
                                 )}
                             </div>
@@ -567,18 +637,79 @@ const FacultyDashboard = () => {
                     </div>
                 </div>
             )}
+
+            {/* Remark Modal */}
+            {showRemarkModal && selectedAppForRemark && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn">
+                    <div className="bg-white dark:bg-gray-800 rounded-3xl p-8 max-w-lg w-full shadow-2xl border border-gray-100 dark:border-gray-700 animate-slideUp">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                <MessageSquare className="w-5 h-5 text-indigo-500" />
+                                Add Remark
+                            </h3>
+                            <button
+                                onClick={() => setShowRemarkModal(false)}
+                                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+                            >
+                                <XCircle className="w-5 h-5 text-gray-500" />
+                            </button>
+                        </div>
+                        
+                        <div className="mb-4 text-sm text-gray-600 dark:text-gray-300">
+                            Adding a remark for <strong>{selectedAppForRemark.student_name}</strong>'s application.
+                            The student will see this remark when tracking their application and can reply.
+                        </div>
+
+                        {selectedAppForRemark.student_reply && (
+                            <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 rounded-r-xl">
+                                <span className="block text-xs font-bold text-blue-700 dark:text-blue-400 mb-1">Student's Reply:</span>
+                                <p className="text-sm text-gray-800 dark:text-gray-200">{selectedAppForRemark.student_reply}</p>
+                            </div>
+                        )}
+
+                        <form onSubmit={handleAddRemarkSubmit} className="space-y-4">
+                            <div>
+                                <textarea
+                                    value={remarkText}
+                                    onChange={(e) => setRemarkText(e.target.value)}
+                                    placeholder="Enter your remark or requested changes..."
+                                    className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white transition-all focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 dark:focus:ring-indigo-900/30 min-h-[120px]"
+                                    required
+                                />
+                            </div>
+                            <div className="flex justify-end gap-3 pt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowRemarkModal(false)}
+                                    className="px-5 py-2.5 text-gray-600 dark:text-gray-300 font-medium hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={loading || !remarkText.trim()}
+                                    className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2"
+                                >
+                                    {loading ? 'Saving...' : 'Save Remark'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
 
 const FacultyTable = ({ faculty }) => (
-    <table className="w-full">
-        <thead className="bg-gray-50/80 dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700">
-            <tr>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Faculty Name</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Email Contact</th>
-            </tr>
-        </thead>
+    <div className="overflow-x-auto">
+        <table className="w-full">
+            <thead className="bg-gray-50/80 dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700">
+                <tr>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Faculty Name</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Email Contact</th>
+                </tr>
+            </thead>
         <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
             {faculty.map(f => (
                 <tr key={f.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
@@ -594,21 +725,22 @@ const FacultyTable = ({ faculty }) => (
                 </tr>
             ))}
         </tbody>
-    </table>
+        </table>
+    </div>
 );
 
 // Extracted Components for cleaner code
-const ApplicationTable = ({ applications, onApprove, onReject }) => (
+const ApplicationTable = ({ applications, onApprove, onReject, onRemark }) => (
     <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
             <thead className="bg-gray-50/80 dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700">
                 <tr>
-                    <th className="px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Student</th>
-                    <th className="px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Leave Details</th>
-                    <th className="px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Reason</th>
-                    <th className="px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Attachments</th>
-                    <th className="px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-center">Actions</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Student</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Leave Details</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Reason</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Attachments</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Status</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-center whitespace-nowrap">Actions</th>
                 </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
@@ -626,12 +758,49 @@ const ApplicationTable = ({ applications, onApprove, onReject }) => (
                                 <span className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 whitespace-nowrap">
                                     {formatDate(app.from_date)} - {formatDate(app.to_date)}
                                 </span>
+                                {app.category_details && Object.keys(app.category_details).length > 0 && (
+                                    <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-700/50">
+                                        <div className="flex flex-col gap-1">
+                                            {Object.entries(app.category_details).map(([key, value]) => (
+                                                <div key={key} className="text-xs">
+                                                    <span className="font-semibold text-gray-600 dark:text-gray-400 capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}: </span>
+                                                    <span className="text-gray-800 dark:text-gray-300">{value}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </td>
                         <td className="px-6 py-4 align-top">
-                            <p className="text-sm text-gray-700 dark:text-gray-300 min-w-[200px] max-w-sm" title={app.reason}>
+                            {app.faculty_remark && (
+                                <div className="mb-2 p-2 bg-indigo-50 dark:bg-indigo-900/20 border-l-2 border-indigo-500 rounded text-xs">
+                                    <strong className="block text-indigo-700 dark:text-indigo-400 mb-0.5">Your Remark:</strong>
+                                    <span className="text-gray-700 dark:text-gray-300">{app.faculty_remark}</span>
+                                </div>
+                            )}
+                            {app.student_reply && (
+                                <div className="mb-2 p-2 bg-blue-50 dark:bg-blue-900/20 border-l-2 border-blue-500 rounded text-xs">
+                                    <strong className="block text-blue-700 dark:text-blue-400 mb-0.5">Student's Reply:</strong>
+                                    <span className="text-gray-700 dark:text-gray-300">{app.student_reply}</span>
+                                </div>
+                            )}
+                            <p className="text-sm text-gray-700 dark:text-gray-300 min-w-[200px] max-w-sm mb-2" title={app.reason}>
                                 {app.reason}
                             </p>
+                            {app.category_results && Object.keys(app.category_results).length > 0 && (
+                                <div className="mt-2 p-2 bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800 rounded">
+                                    <strong className="block text-xs text-emerald-700 dark:text-emerald-400 mb-1 uppercase tracking-wider">Submitted Results:</strong>
+                                    <div className="flex flex-col gap-0.5">
+                                        {Object.entries(app.category_results).map(([key, value]) => (
+                                            <div key={key} className="text-xs">
+                                                <span className="font-medium text-gray-600 dark:text-gray-400 capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}: </span>
+                                                <span className="text-gray-800 dark:text-gray-200">{value}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </td>
                         <td className="px-6 py-4 align-top">
                             {app.proofs && app.proofs.length > 0 ? (
@@ -681,6 +850,14 @@ const ApplicationTable = ({ applications, onApprove, onReject }) => (
                                         <XCircle className="w-4 h-4 flex-shrink-0" />
                                         <span>Reject</span>
                                     </button>
+                                    <button
+                                        onClick={() => onRemark(app)}
+                                        className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-400 rounded-lg text-sm font-semibold transition-colors border border-indigo-500/20"
+                                        title="Add Remark"
+                                    >
+                                        <MessageSquare className="w-4 h-4 flex-shrink-0" />
+                                        <span>Add Remark</span>
+                                    </button>
                                 </div>
                             ) : (
                                 <span className="text-sm text-gray-400 flex justify-center mt-2">--</span>
@@ -694,31 +871,33 @@ const ApplicationTable = ({ applications, onApprove, onReject }) => (
 );
 
 const StudentTable = ({ students }) => (
-    <table className="w-full">
-        <thead className="bg-gray-50/80 dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700">
-            <tr>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Enrollment</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Student Name</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Email Contact</th>
-            </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-            {students.map(student => (
-                <tr key={student.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
-                    <td className="px-6 py-4 text-gray-900 dark:text-white font-medium font-mono text-sm">{student.enrollment_number}</td>
-                    <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-700 dark:text-indigo-300 font-bold text-xs">
-                                {student.name.charAt(0)}
-                            </div>
-                            <span className="text-gray-900 dark:text-white font-medium">{student.name}</span>
-                        </div>
-                    </td>
-                    <td className="px-6 py-4 text-gray-600 dark:text-gray-400 text-sm">{student.email}</td>
+    <div className="overflow-x-auto">
+        <table className="w-full">
+            <thead className="bg-gray-50/80 dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700">
+                <tr>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Enrollment</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Student Name</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Email Contact</th>
                 </tr>
-            ))}
-        </tbody>
-    </table>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                {students.map(student => (
+                    <tr key={student.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                        <td className="px-6 py-4 text-gray-900 dark:text-white font-medium font-mono text-sm">{student.enrollment_number}</td>
+                        <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-700 dark:text-indigo-300 font-bold text-xs">
+                                    {student.name.charAt(0)}
+                                </div>
+                                <span className="text-gray-900 dark:text-white font-medium whitespace-nowrap">{student.name}</span>
+                            </div>
+                        </td>
+                        <td className="px-6 py-4 text-gray-600 dark:text-gray-400 text-sm whitespace-nowrap">{student.email}</td>
+                    </tr>
+                ))}
+            </tbody>
+        </table>
+    </div>
 );
 
 

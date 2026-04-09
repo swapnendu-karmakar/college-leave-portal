@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Copy, Check, Download, FileText, Home, Search } from 'lucide-react';
-import jsPDF from 'jspdf';
+import { Copy, Check, Download, FileText, Home, Search, Loader2 } from 'lucide-react';
+import { getApplicationById } from '../services/supabase';
+import { generateApplicationPDF } from '../utils/pdfGenerator';
 
 const ApplicationSuccess = () => {
     const { applicationId } = useParams();
     const [copied, setCopied] = useState(false);
+    const [downloading, setDownloading] = useState(false);
 
     const handleCopy = async () => {
         try {
@@ -17,44 +19,21 @@ const ApplicationSuccess = () => {
         }
     };
 
-    const handleDownload = () => {
-        const doc = new jsPDF();
-
-        // Add header
-        doc.setFillColor(139, 92, 246);
-        doc.rect(0, 0, 210, 40, 'F');
-
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(24);
-        doc.text('Leave Application', 105, 20, { align: 'center' });
-        doc.setFontSize(14);
-        doc.text('Submission Confirmation', 105, 30, { align: 'center' });
-
-        // Add content
-        doc.setTextColor(0, 0, 0);
-        doc.setFontSize(12);
-        doc.text('Application Details', 20, 60);
-
-        doc.setFontSize(10);
-        doc.text(`Application ID: ${applicationId}`, 20, 75);
-        doc.text(`Submission Date: ${new Date().toLocaleDateString()}`, 20, 85);
-        doc.text(`Status: Pending Review`, 20, 95);
-
-        // Add instructions
-        doc.setFontSize(12);
-        doc.text('Next Steps:', 20, 115);
-        doc.setFontSize(10);
-        doc.text('1. Save this Application ID for future reference', 25, 125);
-        doc.text('2. Your MFT will review your application', 25, 135);
-        doc.text('3. Check application status using the Application ID', 25, 145);
-        doc.text('4. Upload proof if you haven\'t already', 25, 155);
-
-        // Add footer
-        doc.setFontSize(8);
-        doc.setTextColor(128, 128, 128);
-        doc.text('College Leave Portal - Generated on ' + new Date().toLocaleString(), 105, 280, { align: 'center' });
-
-        doc.save(`Leave_Application_${applicationId}.pdf`);
+    const handleDownload = async () => {
+        try {
+            setDownloading(true);
+            const app = await getApplicationById(applicationId);
+            if (app) {
+                generateApplicationPDF(app, 'save');
+            } else {
+                alert('Application details not found.');
+            }
+        } catch (err) {
+            console.error('Failed to download PDF:', err);
+            alert('Failed to generate PDF securely. Please try again from the Check Status page.');
+        } finally {
+            setDownloading(false);
+        }
     };
 
     return (
@@ -105,10 +84,17 @@ const ApplicationSuccess = () => {
                                 </button>
                                 <button
                                     onClick={handleDownload}
-                                    className="flex-1 flex items-center justify-center gap-2 px-4 sm:px-6 py-3 sm:py-3.5 bg-white hover:bg-gray-50 text-purple-600 dark:text-purple-700 rounded-xl font-semibold transition-all hover:scale-105 active:scale-95 shadow-lg"
+                                    disabled={downloading}
+                                    className="flex-1 flex items-center justify-center gap-2 px-4 sm:px-6 py-3 sm:py-3.5 bg-white hover:bg-gray-50 text-purple-600 dark:text-purple-700 rounded-xl font-semibold transition-all hover:scale-105 active:scale-95 shadow-lg disabled:opacity-70 disabled:hover:scale-100 disabled:cursor-not-allowed"
                                 >
-                                    <Download className="w-4 h-4 sm:w-5 sm:h-5" />
-                                    <span className="text-sm sm:text-base">Download PDF</span>
+                                    {downloading ? (
+                                        <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
+                                    ) : (
+                                        <Download className="w-4 h-4 sm:w-5 sm:h-5" />
+                                    )}
+                                    <span className="text-sm sm:text-base">
+                                        {downloading ? 'Generating...' : 'Download PDF'}
+                                    </span>
                                 </button>
                             </div>
                         </div>
