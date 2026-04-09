@@ -302,6 +302,102 @@ app.post('/api/send-rejection', async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────
+// POST /api/send-student-notification
+// ─────────────────────────────────────────────
+app.post('/api/send-student-notification', async (req, res) => {
+  const { email, studentName, applicationId, status, pdfBase64, facultyRemark } = req.body;
+
+  if (!email || !studentName || !applicationId || !status || !pdfBase64) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  try {
+    const transporter = createTransporter();
+    
+    // Convert base64 dataURI to raw data
+    const pdfData = pdfBase64.split('base64,')[1] || pdfBase64;
+
+    let subject = '';
+    let title = '';
+    let bgColor = '';
+    let bodyText = '';
+
+    if (status === 'submitted') {
+        subject = `Leave Application Submitted - ${applicationId}`;
+        title = `Application Received`;
+        bgColor = '#8b5cf6'; // Purple
+        bodyText = `Your leave application has been successfully submitted and is pending review by your faculty. Please find your official application record attached as a PDF.`;
+    } else if (status === 'approved') {
+        subject = `Leave Application Approved - ${applicationId}`;
+        title = `Application Approved`;
+        bgColor = '#10b981'; // Green
+        bodyText = `Great news! Your leave application has been approved by your faculty. Please find your updated official application record attached as a PDF.`;
+    } else if (status === 'rejected') {
+        subject = `Leave Application Rejected - ${applicationId}`;
+        title = `Application Rejected`;
+        bgColor = '#ef4444'; // Red
+        bodyText = `Your leave application has been rejected by your faculty. Please find your official application record attached as a PDF.`;
+    }
+
+    let remarkHtml = '';
+    if (facultyRemark) {
+        remarkHtml = `
+          <div style="background-color: #f3f4f6; padding: 15px; border-left: 4px solid ${bgColor}; margin: 20px 0;">
+            <p style="margin:0; font-size: 14px; color: #4b5563;"><strong>Faculty Remark:</strong><br/>${facultyRemark}</p>
+          </div>
+        `;
+    }
+
+    const info = await transporter.sendMail({
+      from: process.env.VITE_SMTP_FROM,
+      to: email,
+      subject: subject,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9; border-radius: 10px; }
+            .header { background-color: ${bgColor}; color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
+            .content { background-color: white; padding: 30px; border-radius: 0 0 10px 10px; }
+            .footer { text-align: center; margin-top: 20px; color: #777; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header"><h1>${title}</h1></div>
+            <div class="content">
+              <p>Dear ${studentName},</p>
+              <p>${bodyText}</p>
+              ${remarkHtml}
+              <p><strong>Application ID:</strong> ${applicationId}</p>
+              <br/>
+              <p>Best regards,<br>College Leave Portal System</p>
+            </div>
+            <div class="footer"><p>This is an automated email. Please do not reply.</p></div>
+          </div>
+        </body>
+        </html>
+      `,
+      attachments: [
+        {
+          filename: `Leave_Application_${applicationId}.pdf`,
+          content: pdfData,
+          encoding: 'base64'
+        }
+      ]
+    });
+
+    console.log(`Notification email sent to ${email} (Message ID: ${info.messageId})`);
+    res.status(200).json({ success: true, messageId: info.messageId });
+  } catch (error) {
+    console.error('Error sending student notification email:', error);
+    res.status(500).json({ error: 'Failed to send notification email' });
+  }
+});
+
 // Start server locally
 if (process.env.NODE_ENV !== 'production') {
   app.listen(PORT, () => {

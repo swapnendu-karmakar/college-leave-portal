@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Search, FileText, AlertCircle, CheckCircle2, Download, Copy, Check } from 'lucide-react';
-import { getApplicationById, createProof } from '../services/supabase';
+import { Search, FileText, AlertCircle, CheckCircle2, Download, Copy, Check, MessageSquare, Send, Award, Activity } from 'lucide-react';
+import { getApplicationById, createProof, updateApplicationStudentReply, updateApplicationCategoryResults } from '../services/supabase';
 import StatusBadge from '../components/shared/StatusBadge';
 import FileUpload from '../components/shared/FileUpload';
 import { formatDate, getProofStatusText } from '../utils/validators';
-import jsPDF from 'jspdf';
+import { generateApplicationPDF } from '../utils/pdfGenerator';
 
 const StudentStatus = () => {
     const [searchParams] = useSearchParams();
@@ -15,6 +15,12 @@ const StudentStatus = () => {
     const [error, setError] = useState('');
     const [uploadSuccess, setUploadSuccess] = useState('');
     const [copied, setCopied] = useState(false);
+    
+    const [replyText, setReplyText] = useState('');
+    const [submittingReply, setSubmittingReply] = useState(false);
+
+    const [resultData, setResultData] = useState({});
+    const [submittingResult, setSubmittingResult] = useState(false);
 
     const handleSearch = async (e) => {
         e.preventDefault();
@@ -70,79 +76,56 @@ const StudentStatus = () => {
         }
     };
 
+    const handleReplySubmit = async (e) => {
+        e.preventDefault();
+        if (!replyText.trim()) return;
+
+        try {
+            setSubmittingReply(true);
+            await updateApplicationStudentReply(application.application_id, replyText.trim());
+            setUploadSuccess('Reply sent successfully!');
+            
+            const updatedApp = await getApplicationById(applicationId);
+            setApplication(updatedApp);
+            setReplyText('');
+            
+            setTimeout(() => setUploadSuccess(''), 3000);
+        } catch (err) {
+            console.error('Error submitting reply:', err);
+            setError('Failed to send reply. Please try again.');
+        } finally {
+            setSubmittingReply(false);
+        }
+    };
+
+    const handleResultChange = (e) => {
+        const { name, value } = e.target;
+        setResultData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleResultSubmit = async (e) => {
+        e.preventDefault();
+        try {
+            setSubmittingResult(true);
+            await updateApplicationCategoryResults(application.application_id, resultData);
+            
+            setUploadSuccess('Results submitted successfully!');
+            const updatedApp = await getApplicationById(applicationId);
+            setApplication(updatedApp);
+            setResultData({});
+            
+            setTimeout(() => setUploadSuccess(''), 3000);
+        } catch (err) {
+            console.error('Error submitting results:', err);
+            setError('Failed to submit results. Please try again.');
+        } finally {
+            setSubmittingResult(false);
+        }
+    };
+
     const handleDownload = () => {
         if (!application) return;
-
-        const doc = new jsPDF();
-
-        // Header
-        doc.setFillColor(139, 92, 246);
-        doc.rect(0, 0, 210, 40, 'F');
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(24);
-        doc.text('Leave Application Details', 105, 20, { align: 'center' });
-        doc.setFontSize(12);
-        doc.text(application.application_id, 105, 30, { align: 'center' });
-
-        // Content
-        doc.setTextColor(0, 0, 0);
-        doc.setFontSize(14);
-        doc.text('Student Information', 20, 55);
-
-        doc.setFontSize(10);
-        let y = 65;
-        doc.text(`Name: ${application.student_name}`, 20, y);
-        y += 7;
-        doc.text(`Enrollment: ${application.enrollment_number}`, 20, y);
-        y += 7;
-        doc.text(`Email: ${application.email}`, 20, y);
-        y += 10;
-
-        doc.setFontSize(14);
-        doc.text('Academic Details', 20, y);
-        y += 10;
-
-        doc.setFontSize(10);
-        doc.text(`College: ${application.college?.name || 'N/A'}`, 20, y);
-        y += 7;
-        doc.text(`Department: ${application.department?.name || 'N/A'}`, 20, y);
-        y += 7;
-        doc.text(`Branch: ${application.branch?.name || 'N/A'}`, 20, y);
-        y += 7;
-        doc.text(`Division: ${application.division?.code || 'N/A'}`, 20, y);
-        y += 10;
-
-        doc.setFontSize(14);
-        doc.text('Leave Details', 20, y);
-        y += 10;
-
-        doc.setFontSize(10);
-        doc.text(`Leave Type: ${application.leave_type}`, 20, y);
-        y += 7;
-        doc.text(`From: ${formatDate(application.from_date)}`, 20, y);
-        y += 7;
-        doc.text(`To: ${formatDate(application.to_date)}`, 20, y);
-        y += 7;
-        doc.text(`Reason: ${application.reason}`, 20, y, { maxWidth: 170 });
-        y += 15;
-
-        doc.setFontSize(14);
-        doc.text('Status', 20, y);
-        y += 10;
-
-        doc.setFontSize(10);
-        doc.text(`Application Status: ${application.status.toUpperCase()}`, 20, y);
-        y += 7;
-        doc.text(`Proof Status: ${getProofStatusText(application.proof_status)}`, 20, y);
-        y += 7;
-        doc.text(`Submitted: ${formatDate(application.created_at)}`, 20, y);
-
-        // Footer
-        doc.setFontSize(8);
-        doc.setTextColor(128, 128, 128);
-        doc.text('College Leave Portal - Generated on ' + new Date().toLocaleString(), 105, 280, { align: 'center' });
-
-        doc.save(`Application_${application.application_id}.pdf`);
+        generateApplicationPDF(application, 'save');
     };
 
     return (
@@ -252,6 +235,62 @@ const StudentStatus = () => {
                             </div>
                         </div>
 
+                        {/* Remarks & Reply Section */}
+                        {application.faculty_remark && (
+                            <div className="mb-8 overflow-hidden rounded-2xl border border-indigo-100 dark:border-indigo-900/50 shadow-sm">
+                                <div className="bg-indigo-50 dark:bg-indigo-900/30 p-5 sm:p-6">
+                                    <h3 className="text-lg font-bold text-indigo-900 dark:text-indigo-300 flex items-center gap-2 mb-3">
+                                        <MessageSquare className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                                        Remark from Faculty
+                                    </h3>
+                                    <p className="text-indigo-800 dark:text-indigo-200 bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-indigo-100 dark:border-indigo-800 text-sm sm:text-base leading-relaxed">
+                                        {application.faculty_remark}
+                                    </p>
+                                </div>
+                                
+                                <div className="bg-white dark:bg-gray-800 p-5 sm:p-6 border-t border-indigo-100 dark:border-indigo-900/50">
+                                    {application.student_reply ? (
+                                        <div>
+                                            <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wider">Your Reply</h4>
+                                            <p className="text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl text-sm sm:text-base border border-gray-100 dark:border-gray-700">
+                                                {application.student_reply}
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <form onSubmit={handleReplySubmit} className="space-y-4">
+                                            <div>
+                                                <label htmlFor="replyText" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
+                                                    Reply to Faculty
+                                                </label>
+                                                <textarea
+                                                    id="replyText"
+                                                    value={replyText}
+                                                    onChange={(e) => setReplyText(e.target.value)}
+                                                    placeholder="Type your response here..."
+                                                    className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white transition-all focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 dark:focus:ring-indigo-900/30 min-h-[100px]"
+                                                    required
+                                                />
+                                            </div>
+                                            <div className="flex justify-end">
+                                                <button
+                                                    type="submit"
+                                                    disabled={submittingReply || !replyText.trim()}
+                                                    className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all disabled:opacity-70 disabled:cursor-not-allowed"
+                                                >
+                                                    {submittingReply ? (
+                                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                                    ) : (
+                                                        <Send className="w-4 h-4" />
+                                                    )}
+                                                    Send Reply
+                                                </button>
+                                            </div>
+                                        </form>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
                         {/* Details Grid */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mb-8">
                             <DetailItem label="Student Name" value={application.student_name} />
@@ -270,6 +309,35 @@ const StudentStatus = () => {
                             <div className="sm:col-span-2">
                                 <DetailItem label="Reason" value={application.reason} />
                             </div>
+                            
+                            {/* Render Category Details */}
+                            {application.category_details && Object.keys(application.category_details).length > 0 && (
+                                <div className="sm:col-span-2 mt-4 p-5 bg-fuchsia-50 dark:bg-fuchsia-900/10 border border-fuchsia-100 dark:border-fuchsia-800 rounded-xl">
+                                    <h4 className="text-sm font-bold text-fuchsia-800 dark:text-fuchsia-300 uppercase tracking-wider mb-3">
+                                        {application.leave_type} Details
+                                    </h4>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        {Object.entries(application.category_details).map(([key, value]) => (
+                                            <DetailItem key={key} label={key.replace(/([A-Z])/g, ' $1').trim()} value={value} />
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Render Category Results if present */}
+                            {application.category_results && Object.keys(application.category_results).length > 0 && (
+                                <div className="sm:col-span-2 mt-2 p-5 bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800 rounded-xl">
+                                    <h4 className="text-sm font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider flex items-center gap-2 mb-3">
+                                        <Award className="w-4 h-4" />
+                                        Submitted Results
+                                    </h4>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        {Object.entries(application.category_results).map(([key, value]) => (
+                                            <DetailItem key={key} label={key.replace(/([A-Z])/g, ' $1').trim()} value={value} />
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* Proofs Section */}
@@ -316,6 +384,79 @@ const StudentStatus = () => {
                                     onUploadSuccess={handleProofUpload}
                                     onUploadError={handleProofError}
                                 />
+                            </div>
+                        )}
+
+                        {/* Event Results Form */}
+                        {application.leave_type && !['Other', 'Family Emergency'].includes(application.leave_type) && 
+                         (!application.category_results || Object.keys(application.category_results).length === 0) && (
+                            <div className="mt-8 p-6 bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl border-2 border-emerald-200 dark:border-emerald-800/50">
+                                <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-2 flex items-center gap-2">
+                                    <Activity className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                                    Post-Event Results / Updates
+                                </h3>
+                                <p className="text-gray-600 dark:text-gray-300 text-sm mb-6">
+                                    Please submit the outcome or results of your {application.leave_type} here. You can also upload certificates using the Proof Upload section above.
+                                </p>
+                                
+                                <form onSubmit={handleResultSubmit} className="space-y-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        {application.leave_type === 'Hackathon' && (
+                                            <>
+                                                <div>
+                                                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Final Result</label>
+                                                    <input type="text" name="finalResult" value={resultData.finalResult || ''} onChange={handleResultChange} required placeholder="e.g. Winner, Participant" className="w-full px-4 py-3 bg-white dark:bg-gray-900 border-2 border-emerald-100 dark:border-emerald-800 rounded-xl text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500 text-sm" />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Prize Won</label>
+                                                    <input type="text" name="prizeWon" value={resultData.prizeWon || ''} onChange={handleResultChange} placeholder="e.g. $500, None" className="w-full px-4 py-3 bg-white dark:bg-gray-900 border-2 border-emerald-100 dark:border-emerald-800 rounded-xl text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500 text-sm" />
+                                                </div>
+                                                <div className="sm:col-span-2">
+                                                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Project Link (Optional)</label>
+                                                    <input type="url" name="projectLink" value={resultData.projectLink || ''} onChange={handleResultChange} placeholder="https://github.com/..." className="w-full px-4 py-3 bg-white dark:bg-gray-900 border-2 border-emerald-100 dark:border-emerald-800 rounded-xl text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500 text-sm" />
+                                                </div>
+                                            </>
+                                        )}
+                                        {application.leave_type === 'Sports' && (
+                                            <div className="sm:col-span-2">
+                                                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Result / Medal Won</label>
+                                                <input type="text" name="medalWon" value={resultData.medalWon || ''} onChange={handleResultChange} required placeholder="e.g. Gold Medal, Participant" className="w-full px-4 py-3 bg-white dark:bg-gray-900 border-2 border-emerald-100 dark:border-emerald-800 rounded-xl text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500 text-sm" />
+                                            </div>
+                                        )}
+                                        {application.leave_type === 'Cultural Event' && (
+                                            <div className="sm:col-span-2">
+                                                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Result / Awards Won</label>
+                                                <input type="text" name="awardsWon" value={resultData.awardsWon || ''} onChange={handleResultChange} required placeholder="e.g. 1st Place in Dance" className="w-full px-4 py-3 bg-white dark:bg-gray-900 border-2 border-emerald-100 dark:border-emerald-800 rounded-xl text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500 text-sm" />
+                                            </div>
+                                        )}
+                                        {application.leave_type === 'NCC' && (
+                                            <div className="sm:col-span-2">
+                                                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Certificate Achieved</label>
+                                                <input type="text" name="certificateAchieved" value={resultData.certificateAchieved || ''} onChange={handleResultChange} required placeholder="e.g. C Certificate" className="w-full px-4 py-3 bg-white dark:bg-gray-900 border-2 border-emerald-100 dark:border-emerald-800 rounded-xl text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500 text-sm" />
+                                            </div>
+                                        )}
+                                        {application.leave_type === 'Medical' && (
+                                            <div className="sm:col-span-2">
+                                                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Current Status</label>
+                                                <input type="text" name="healthStatus" value={resultData.healthStatus || ''} onChange={handleResultChange} required placeholder="e.g. Fully Recovered" className="w-full px-4 py-3 bg-white dark:bg-gray-900 border-2 border-emerald-100 dark:border-emerald-800 rounded-xl text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500 text-sm" />
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="flex justify-end mt-4">
+                                        <button
+                                            type="submit"
+                                            disabled={submittingResult || Object.keys(resultData).length === 0}
+                                            className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition-all disabled:opacity-70 disabled:cursor-not-allowed"
+                                        >
+                                            {submittingResult ? (
+                                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                            ) : (
+                                                <Send className="w-4 h-4" />
+                                            )}
+                                            Submit Result
+                                        </button>
+                                    </div>
+                                </form>
                             </div>
                         )}
                     </div>

@@ -97,3 +97,30 @@ export const verifyOTP = async (email, otp, hash, expiresAt) => {
 
     return { success: true };
 };
+
+/**
+ * Send notification email with PDF to a student (submitted, approved, or rejected).
+ */
+export const sendStudentNotification = async (
+    email,
+    studentName,
+    applicationId,
+    status,
+    pdfBase64,
+    facultyRemark = null
+) => {
+    const response = await fetch(`${API_URL}/send-student-notification`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, studentName, applicationId, status, pdfBase64, facultyRemark }),
+    });
+
+    const data = await safeJson(response);
+
+    if (!response.ok) {
+        throw new Error(data?.error || `Server error ${response.status}: ${response.statusText}`);
+    }
+
+    console.log(`Student notification (${status}) email sent:`, data?.messageId);
+    return { success: true, messageId: data?.messageId };
+};

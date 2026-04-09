@@ -11,9 +11,11 @@ import {
     createLeaveApplication,
     createProof,
     deleteStorageFile,
+    getApplicationById,
 } from '../services/supabase';
-import { sendVerificationOTP, verifyOTP } from '../services/emailService';
+import { sendVerificationOTP, verifyOTP, sendStudentNotification } from '../services/emailService';
 import { validateDateRange } from '../utils/validators';
+import { generateApplicationPDF } from '../utils/pdfGenerator';
 
 const StudentApplication = () => {
     const navigate = useNavigate();
@@ -38,6 +40,7 @@ const StudentApplication = () => {
         fromDate: '',
         toDate: '',
     });
+    const [categoryDetails, setCategoryDetails] = useState({});
     const [uploadedProofs, setUploadedProofs] = useState([]);
 
     // General State
@@ -138,8 +141,16 @@ const StudentApplication = () => {
     // Step 3 Actions
     const handleInputChange = (e) => {
         const { name, value } = e.target;
+        if (name === 'leaveType') {
+            setCategoryDetails({});
+        }
         setFormData((prev) => ({ ...prev, [name]: value }));
         setError('');
+    };
+
+    const handleCategoryDetailChange = (e) => {
+        const { name, value } = e.target;
+        setCategoryDetails(prev => ({ ...prev, [name]: value }));
     };
 
     const handleProofUpload = (proofData) => {
@@ -205,6 +216,7 @@ const StudentApplication = () => {
                 leave_type: formData.leaveType,
                 from_date: formData.fromDate,
                 to_date: formData.toDate,
+                category_details: categoryDetails,
                 status: 'pending',
                 proof_status: uploadedProofs.length > 0 ? 'submitted' : 'not_submitted',
             });
@@ -218,6 +230,20 @@ const StudentApplication = () => {
                         status: 'pending',
                     })
                 ));
+            }
+
+            try {
+                const fullApp = await getApplicationById(application.application_id);
+                const pdfBase64 = generateApplicationPDF(fullApp, 'datauristring');
+                await sendStudentNotification(
+                    studentDetails.email,
+                    studentDetails.name,
+                    application.application_id,
+                    'submitted',
+                    pdfBase64
+                );
+            } catch (notifyErr) {
+                console.error("Successfully submitted application but failed to send email notification", notifyErr);
             }
 
             navigate(`/success/${application.application_id}`);
@@ -487,6 +513,77 @@ const StudentApplication = () => {
                                             />
                                         </div>
                                     </div>
+
+                                    {/* Dynamic Category Details */}
+                                    {formData.leaveType && !['Other', 'Family Emergency'].includes(formData.leaveType) && (
+                                        <div className="sm:col-span-2 p-5 bg-fuchsia-50 dark:bg-fuchsia-900/10 rounded-xl border border-fuchsia-100 dark:border-fuchsia-800 space-y-4">
+                                            <h3 className="font-bold text-fuchsia-800 dark:text-fuchsia-300 text-sm uppercase tracking-wider">Additional {formData.leaveType} Details</h3>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                {formData.leaveType === 'Hackathon' && (
+                                                    <>
+                                                        <div className="space-y-1">
+                                                            <label className="text-xs font-bold text-gray-600 dark:text-gray-400">Event Name *</label>
+                                                            <input type="text" name="eventName" value={categoryDetails.eventName || ''} onChange={handleCategoryDetailChange} required className="w-full px-3 py-2 border-2 border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-800 focus:border-fuchsia-500 focus:ring-2 focus:ring-fuchsia-200 dark:focus:ring-fuchsia-900 text-gray-900 dark:text-white" />
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <label className="text-xs font-bold text-gray-600 dark:text-gray-400">Location *</label>
+                                                            <input type="text" name="location" value={categoryDetails.location || ''} onChange={handleCategoryDetailChange} required className="w-full px-3 py-2 border-2 border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-800 focus:border-fuchsia-500 focus:ring-2 focus:ring-fuchsia-200 dark:focus:ring-fuchsia-900 text-gray-900 dark:text-white" />
+                                                        </div>
+                                                        <div className="space-y-1 sm:col-span-2">
+                                                            <label className="text-xs font-bold text-gray-600 dark:text-gray-400">Prize / Money Involved</label>
+                                                            <input type="text" name="prizeDetails" value={categoryDetails.prizeDetails || ''} onChange={handleCategoryDetailChange} placeholder="e.g. $500 1st Prize, or None" className="w-full px-3 py-2 border-2 border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-800 focus:border-fuchsia-500 focus:ring-2 focus:ring-fuchsia-200 dark:focus:ring-fuchsia-900 text-gray-900 dark:text-white" />
+                                                        </div>
+                                                    </>
+                                                )}
+                                                {formData.leaveType === 'NCC' && (
+                                                    <>
+                                                        <div className="space-y-1">
+                                                            <label className="text-xs font-bold text-gray-600 dark:text-gray-400">Camp Name *</label>
+                                                            <input type="text" name="campName" value={categoryDetails.campName || ''} onChange={handleCategoryDetailChange} required className="w-full px-3 py-2 border-2 border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-800 focus:border-fuchsia-500 focus:ring-2 focus:ring-fuchsia-200 dark:focus:ring-fuchsia-900 text-gray-900 dark:text-white" />
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <label className="text-xs font-bold text-gray-600 dark:text-gray-400">Location *</label>
+                                                            <input type="text" name="location" value={categoryDetails.location || ''} onChange={handleCategoryDetailChange} required className="w-full px-3 py-2 border-2 border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-800 focus:border-fuchsia-500 focus:ring-2 focus:ring-fuchsia-200 dark:focus:ring-fuchsia-900 text-gray-900 dark:text-white" />
+                                                        </div>
+                                                    </>
+                                                )}
+                                                {formData.leaveType === 'Sports' && (
+                                                    <>
+                                                        <div className="space-y-1">
+                                                            <label className="text-xs font-bold text-gray-600 dark:text-gray-400">Tournament Name *</label>
+                                                            <input type="text" name="tournamentName" value={categoryDetails.tournamentName || ''} onChange={handleCategoryDetailChange} required className="w-full px-3 py-2 border-2 border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-800 focus:border-fuchsia-500 focus:ring-2 focus:ring-fuchsia-200 dark:focus:ring-fuchsia-900 text-gray-900 dark:text-white" />
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <label className="text-xs font-bold text-gray-600 dark:text-gray-400">Sport Type *</label>
+                                                            <input type="text" name="sportType" value={categoryDetails.sportType || ''} onChange={handleCategoryDetailChange} required className="w-full px-3 py-2 border-2 border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-800 focus:border-fuchsia-500 focus:ring-2 focus:ring-fuchsia-200 dark:focus:ring-fuchsia-900 text-gray-900 dark:text-white" />
+                                                        </div>
+                                                        <div className="space-y-1 sm:col-span-2">
+                                                            <label className="text-xs font-bold text-gray-600 dark:text-gray-400">Level (College, State, National) *</label>
+                                                            <input type="text" name="level" value={categoryDetails.level || ''} onChange={handleCategoryDetailChange} required className="w-full px-3 py-2 border-2 border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-800 focus:border-fuchsia-500 focus:ring-2 focus:ring-fuchsia-200 dark:focus:ring-fuchsia-900 text-gray-900 dark:text-white" />
+                                                        </div>
+                                                    </>
+                                                )}
+                                                {formData.leaveType === 'Cultural Event' && (
+                                                    <>
+                                                        <div className="space-y-1">
+                                                            <label className="text-xs font-bold text-gray-600 dark:text-gray-400">Event/Fest Name *</label>
+                                                            <input type="text" name="eventName" value={categoryDetails.eventName || ''} onChange={handleCategoryDetailChange} required className="w-full px-3 py-2 border-2 border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-800 focus:border-fuchsia-500 focus:ring-2 focus:ring-fuchsia-200 dark:focus:ring-fuchsia-900 text-gray-900 dark:text-white" />
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <label className="text-xs font-bold text-gray-600 dark:text-gray-400">Activity Role *</label>
+                                                            <input type="text" name="activityRole" value={categoryDetails.activityRole || ''} onChange={handleCategoryDetailChange} required placeholder="e.g. Dancer, Singer, Organizer" className="w-full px-3 py-2 border-2 border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-800 focus:border-fuchsia-500 focus:ring-2 focus:ring-fuchsia-200 dark:focus:ring-fuchsia-900 text-gray-900 dark:text-white" />
+                                                        </div>
+                                                    </>
+                                                )}
+                                                {formData.leaveType === 'Medical' && (
+                                                    <div className="space-y-1 sm:col-span-2">
+                                                        <label className="text-xs font-bold text-gray-600 dark:text-gray-400">Expected Recovery Date (For Fitness Certificate) *</label>
+                                                        <input type="date" name="recoveryDate" value={categoryDetails.recoveryDate || ''} onChange={handleCategoryDetailChange} required className="w-full px-3 py-2 border-2 border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-800 focus:border-fuchsia-500 focus:ring-2 focus:ring-fuchsia-200 dark:focus:ring-fuchsia-900 text-gray-900 dark:text-white" />
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
 
                                     <div className="space-y-2 sm:col-span-2">
                                         <label htmlFor="reason" className="flex items-center gap-2 font-semibold text-gray-700 dark:text-gray-300 text-sm">

@@ -510,6 +510,42 @@ export const updateProofStatus = async (applicationId, proofStatus) => {
   return data;
 };
 
+export const updateApplicationFacultyRemark = async (id, facultyRemark) => {
+  const { data, error } = await supabaseAdmin
+    .from('leave_applications')
+    .update({ faculty_remark: facultyRemark })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
+export const updateApplicationStudentReply = async (applicationId, studentReply) => {
+  const { data, error } = await supabaseAdmin
+    .from('leave_applications')
+    .update({ student_reply: studentReply })
+    .eq('application_id', applicationId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
+export const updateApplicationCategoryResults = async (applicationId, categoryResults) => {
+  const { data, error } = await supabaseAdmin
+    .from('leave_applications')
+    .update({ category_results: categoryResults })
+    .eq('application_id', applicationId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
 // ============= PROOF OPERATIONS =============
 export const uploadProof = async (file, applicationId) => {
   const fileExt = file.name.split('.').pop();
