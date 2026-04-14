@@ -464,7 +464,7 @@ export const getApplicationById = async (applicationId) => {
       division:division_id (code),
       proofs (*)
     `)
-    .eq('application_id', applicationId)
+    .eq('application_id', String(applicationId).trim())
     .single();
 
   if (error) throw error;

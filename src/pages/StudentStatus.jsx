@@ -34,6 +34,7 @@ const StudentStatus = () => {
             setError('');
             const data = await getApplicationById(applicationId.trim());
             setApplication(data);
+            setApplicationId(applicationId.trim());
         } catch (err) {
             console.error('Error fetching application:', err);
             setError('Application not found. Please check your Application ID.');
