@@ -4,11 +4,28 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  esbuild: {
+    drop: ['console', 'debugger'],
+  },
   server: {
     proxy: {
       '/api': {
         target: 'http://localhost:3000',
         changeOrigin: true,
+      }
+    }
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('xlsx')) return 'vendor-xlsx';
+            if (id.includes('jspdf') || id.includes('html2canvas') || id.includes('dompurify') || id.includes('purify')) return 'vendor-pdf';
+            if (id.includes('lucide-react')) return 'vendor-lucide';
+            if (id.includes('@supabase')) return 'vendor-supabase';
+          }
+        }
       }
     }
   }

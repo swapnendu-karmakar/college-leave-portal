@@ -370,22 +370,20 @@ const StudentStatus = () => {
                         )}
 
                         {/* Upload Section */}
-                        {application.proof_status === 'not_submitted' && (
-                            <div className="p-6 bg-blue-50 dark:bg-blue-900/20 rounded-2xl border-2 border-blue-200 dark:border-blue-800/50">
-                                <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-2 flex items-center gap-2">
-                                    <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                                    Upload Proof
-                                </h3>
-                                <p className="text-gray-600 dark:text-gray-300 text-sm mb-4">
-                                    You can upload your proof document here. It will be reviewed by your MFT.
-                                </p>
-                                <FileUpload
-                                    applicationId={application.application_id}
-                                    onUploadSuccess={handleProofUpload}
-                                    onUploadError={handleProofError}
-                                />
-                            </div>
-                        )}
+                        <div className="p-6 bg-blue-50 dark:bg-blue-900/20 rounded-2xl border-2 border-blue-200 dark:border-blue-800/50">
+                            <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-2 flex items-center gap-2">
+                                <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                                Upload Proof / Extra Documents
+                            </h3>
+                            <p className="text-gray-600 dark:text-gray-300 text-sm mb-4">
+                                You can upload additional proofs, medical certificates, or relevant documents here, even if you already submitted them during the application.
+                            </p>
+                            <FileUpload
+                                applicationId={application.application_id}
+                                onUploadSuccess={handleProofUpload}
+                                onUploadError={handleProofError}
+                            />
+                        </div>
 
                         {/* Event Results Form */}
                         {application.leave_type && !['Other', 'Family Emergency'].includes(application.leave_type) && 
