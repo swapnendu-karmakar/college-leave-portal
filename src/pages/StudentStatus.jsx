@@ -407,7 +407,7 @@ const StudentStatus = () => {
                                                 </div>
                                                 <div>
                                                     <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Prize Won</label>
-                                                    <input type="text" name="prizeWon" value={resultData.prizeWon || ''} onChange={handleResultChange} placeholder="e.g. $500, None" className="w-full px-4 py-3 bg-white dark:bg-gray-900 border-2 border-emerald-100 dark:border-emerald-800 rounded-xl text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500 text-sm" />
+                                                    <input type="text" name="prizeWon" value={resultData.prizeWon || ''} onChange={handleResultChange} placeholder="e.g. ₹5000, None" className="w-full px-4 py-3 bg-white dark:bg-gray-900 border-2 border-emerald-100 dark:border-emerald-800 rounded-xl text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500 text-sm" />
                                                 </div>
                                                 <div className="sm:col-span-2">
                                                     <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Project Link (Optional)</label>

@@ -68,7 +68,7 @@ const StudentApplication = () => {
         try {
             setLoading(true);
             setError('');
-            
+
             // Fetch student full details
             const student = await getStudentFullDetails(enrollmentNumber);
             if (!student) {
@@ -127,7 +127,7 @@ const StudentApplication = () => {
             setError('');
 
             await verifyOTP(studentDetails.email, otpCode, otpHash, otpExpiresAt);
-            
+
             setStep(3);
             setSuccess('Identity verified successfully! Please fill in your leave details.');
             setTimeout(() => setSuccess(''), 5000);
@@ -260,7 +260,7 @@ const StudentApplication = () => {
     return (
         <div className="min-h-screen bg-purple-50 dark:bg-gray-900 py-6 sm:py-12 px-4 transition-colors duration-300">
             <div className="max-w-4xl mx-auto">
-                
+
                 {/* Header Card */}
                 <div className="bg-purple-600 dark:bg-purple-900 text-white rounded-t-3xl p-6 sm:p-10 shadow-xl relative overflow-hidden transition-colors duration-300">
                     <div className="absolute inset-0 bg-white/10 backdrop-blur-sm"></div>
@@ -302,7 +302,7 @@ const StudentApplication = () => {
                 )}
 
                 <div className="bg-white dark:bg-gray-800 rounded-b-3xl shadow-xl transition-colors duration-300 relative min-h-[400px]">
-                    
+
                     {/* STEP 1: ENROLLMENT */}
                     {step === 1 && (
                         <div className="p-6 sm:p-12 max-w-2xl mx-auto text-center animate-fade-in">
@@ -334,7 +334,7 @@ const StudentApplication = () => {
                                     disabled={loading || !enrollmentNumber}
                                     className="mt-8 mx-auto flex items-center gap-2 px-8 py-4 bg-purple-600 text-white rounded-xl font-bold shadow-lg hover:bg-purple-700 hover:-translate-y-1 transition-all disabled:opacity-50 disabled:transform-none"
                                 >
-                                    {loading ? 'Verifying...' : 'Send OTP'} 
+                                    {loading ? 'Verifying...' : 'Send OTP'}
                                     {!loading && <ChevronRight className="w-5 h-5" />}
                                 </button>
                             </form>
@@ -365,7 +365,7 @@ const StudentApplication = () => {
                                         placeholder="000000"
                                     />
                                 </div>
-                                
+
                                 <div className="mt-8 flex flex-col items-center gap-4">
                                     <button
                                         type="submit"
@@ -374,7 +374,7 @@ const StudentApplication = () => {
                                     >
                                         {loading ? 'Verifying...' : 'Verify OTP'}
                                     </button>
-                                    
+
                                     <button
                                         type="button"
                                         onClick={handleResendOTP}
@@ -391,7 +391,7 @@ const StudentApplication = () => {
                     {/* STEP 3: LEAVE FORM (Read-Only Specs + Leave Details) */}
                     {step === 3 && studentDetails && (
                         <form onSubmit={handleSubmitApplication} className="animate-fade-in">
-                            
+
                             {/* Read-Only Academic Details */}
                             <div className="p-6 sm:p-8 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30">
                                 <div className="flex items-center gap-3 mb-6">
@@ -531,7 +531,7 @@ const StudentApplication = () => {
                                                         </div>
                                                         <div className="space-y-1 sm:col-span-2">
                                                             <label className="text-xs font-bold text-gray-600 dark:text-gray-400">Prize / Money Involved</label>
-                                                            <input type="text" name="prizeDetails" value={categoryDetails.prizeDetails || ''} onChange={handleCategoryDetailChange} placeholder="e.g. $500 1st Prize, or None" className="w-full px-3 py-2 border-2 border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-800 focus:border-fuchsia-500 focus:ring-2 focus:ring-fuchsia-200 dark:focus:ring-fuchsia-900 text-gray-900 dark:text-white" />
+                                                            <input type="text" name="prizeDetails" value={categoryDetails.prizeDetails || ''} onChange={handleCategoryDetailChange} placeholder="e.g. ₹5000 1st Prize, or None" className="w-full px-3 py-2 border-2 border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-800 focus:border-fuchsia-500 focus:ring-2 focus:ring-fuchsia-200 dark:focus:ring-fuchsia-900 text-gray-900 dark:text-white" />
                                                         </div>
                                                     </>
                                                 )}
@@ -618,7 +618,7 @@ const StudentApplication = () => {
 
                                 <div className="w-full max-w-2xl mx-auto grid gap-6">
                                     <FileUpload
-                                        applicationId={null} 
+                                        applicationId={null}
                                         onUploadSuccess={handleProofUpload}
                                         onUploadError={(msg) => setError(msg)}
                                     />
